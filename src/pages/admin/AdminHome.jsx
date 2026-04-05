@@ -64,7 +64,7 @@ export default function AdminHome() {
     <div className="space-y-6">
       <section className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <div className="xl:col-span-2">
-<div className="overflow-hidden rounded-[28px] bg-gradient-to-r from-emerald-500 via-green-500 to-teal-400 p-7 text-white shadow-xl">            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+<div className="overflow-hidden rounded-[28px] from-emerald-300 via-green-300 to-teal-200 to-teal-400 p-7 text-white shadow-xl">            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
               <div>
                 <p className="text-sm uppercase tracking-[0.25em] text-white/75">
                   Hệ thống quản lý nhà thuốc
