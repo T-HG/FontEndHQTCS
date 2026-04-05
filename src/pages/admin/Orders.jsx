@@ -106,7 +106,7 @@ export default function Orders() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-7xl space-y-6 px-4 py-6 animate-in fade-in duration-300">
+    <div className="w-full space-y-4 pt-0 animate-in fade-in duration-300">
       {/* HEADER */}
       <div className="flex items-end justify-between">
         <div>
