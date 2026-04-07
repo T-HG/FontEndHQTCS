@@ -20,7 +20,6 @@ export default function Sidebar() {
 
   const adminMenu = [
     { to: '/admin', label: 'Dashboard', icon: <FaChartPie /> },
-    { to: '/sales', label: 'Bán hàng (POS)', icon: <FaCashRegister /> }, // <-- Thêm cho admin dễ test
     { to: '/employees', label: 'Quản lý nhân viên', icon: <FaUserTie /> },
     { to: '/medicines', label: 'Quản lý thuốc', icon: <FaPills /> },
     { to: '/inventory', label: 'Kho hàng', icon: <FaWarehouse /> },

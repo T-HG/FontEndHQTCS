@@ -13,60 +13,43 @@ const initialCustomers = [
     id: 'KH000005',
     name: 'Nguyễn Văn An',
     phone: '0901234567',
-    group: 'Khách VIP',
     gender: 'Nam',
     totalSpent: 15600000,
-    debt: 0,
     address: 'Q. Cầu Giấy, Hà Nội',
   },
   {
     id: 'KH000004',
     name: 'Trần Thị Bích',
     phone: '0987654321',
-    group: 'Khách thường',
     gender: 'Nữ',
     totalSpent: 450000,
-    debt: 50000,
     address: 'Q. Đống Đa, Hà Nội',
   },
   {
     id: 'KH000003',
     name: 'Lê Hoàng Hải',
     phone: '0912223334',
-    group: 'Khách buôn',
     gender: 'Nam',
     totalSpent: 85000000,
-    debt: 1200000,
     address: 'TP. Vĩnh Yên, Vĩnh Phúc',
   },
   {
     id: 'KH000002',
     name: 'Phạm Mai Lan',
     phone: '0933445566',
-    group: 'Khách thường',
     gender: 'Nữ',
     totalSpent: 120000,
-    debt: 0,
     address: 'TX. Phúc Yên, Vĩnh Phúc',
   },
 ]
 
-const groupOptions = [
-  'Khách thường',
-  'Khách VIP',
-  'Khách buôn',
-  'Khách sỉ',
-  'Đối tác',
-]
-
 function formatMoney(value) {
-  return new Intl.NumberFormat('vi-VN').format(Number(value || 0))
+  return new Intl.NumberFormat('vi-VN').format(Number(value || 0)) + ' đ'
 }
 
 export default function Customers() {
   const [customers, setCustomers] = useState(initialCustomers)
   const [search, setSearch] = useState('')
-  const [selectedGroup, setSelectedGroup] = useState('Tất cả')
   const [showModal, setShowModal] = useState(false)
 
   // State cho Form thêm khách hàng mới
@@ -74,7 +57,6 @@ export default function Customers() {
     code: '',
     name: '',
     phone: '',
-    group: 'Khách thường',
     gender: 'Nam',
     email: '',
     address: '',
@@ -85,18 +67,15 @@ export default function Customers() {
   const filteredCustomers = useMemo(() => {
     return customers.filter((item) => {
       const keyword = search.trim().toLowerCase()
-      const matchSearch =
+      return (
         !keyword ||
         item.id.toLowerCase().includes(keyword) ||
         item.name.toLowerCase().includes(keyword) ||
-        item.phone.includes(keyword)
-
-      const matchGroup =
-        selectedGroup === 'Tất cả' || item.group === selectedGroup
-
-      return matchSearch && matchGroup
+        item.phone.includes(keyword) ||
+        item.address.toLowerCase().includes(keyword) // Hỗ trợ tìm kiếm theo cả địa chỉ
+      )
     })
-  }, [customers, search, selectedGroup])
+  }, [customers, search])
 
   const handleCloseModal = () => {
     setShowModal(false)
@@ -104,7 +83,6 @@ export default function Customers() {
       code: '',
       name: '',
       phone: '',
-      group: 'Khách thường',
       gender: 'Nam',
       email: '',
       address: '',
@@ -136,10 +114,8 @@ export default function Customers() {
       id: formData.code || `KH${String(customers.length + 6).padStart(6, '0')}`,
       name: formData.name,
       phone: formData.phone,
-      group: formData.group,
       gender: formData.gender,
       totalSpent: 0,
-      debt: 0,
       address: formData.address,
     }
 
@@ -148,69 +124,26 @@ export default function Customers() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-7xl space-y-6 px-4 py-6">
+    <div className="w-full space-y-4 pt-0 animate-in fade-in duration-300">
       {/* HEADER */}
-      <div className="flex items-end justify-between">
+      <div className="flex items-end justify-between border-b border-slate-100 pb-4">
         <div>
           <h1 className="text-3xl font-bold text-slate-900">Khách hàng</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Quản lý thông tin liên hệ, lịch sử mua hàng và công nợ khách hàng
+            Quản lý thông tin liên hệ và lịch sử mua hàng của khách hàng
           </p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[280px_minmax(0,1fr)]">
-        {/* LEFT FILTER */}
-        <div className="space-y-5">
-          <div className="rounded-[28px] bg-white p-5 shadow-lg ring-1 ring-slate-100">
-            <div className="mt-2">
-              <div className="flex items-center gap-3 rounded-2xl bg-slate-100 px-4 py-3 text-slate-400">
-                <FaSearch />
-                <input
-                  type="text"
-                  placeholder="Tìm nhóm khách..."
-                  className="w-full bg-transparent text-sm text-slate-700 outline-none"
-                />
-              </div>
-            </div>
-
-            <div className="custom-scrollbar mt-4 max-h-[360px] space-y-1 overflow-y-auto pr-2">
-              <button
-                onClick={() => setSelectedGroup('Tất cả')}
-                className={`block w-full rounded-xl px-4 py-3 text-left text-sm transition ${
-                  selectedGroup === 'Tất cả'
-                    ? 'bg-blue-50 font-semibold text-blue-600'
-                    : 'text-slate-600 hover:bg-slate-50'
-                }`}
-              >
-                Tất cả nhóm
-              </button>
-              {groupOptions.map((item) => (
-                <button
-                  key={item}
-                  onClick={() => setSelectedGroup(item)}
-                  className={`block w-full rounded-xl px-4 py-3 text-left text-sm transition ${
-                    selectedGroup === item
-                      ? 'bg-blue-50 font-semibold text-blue-600'
-                      : 'text-slate-600 hover:bg-slate-50'
-                  }`}
-                >
-                  {item}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* RIGHT CONTENT */}
+      <div className="grid grid-cols-1 gap-6">
         <div className="rounded-[28px] bg-white p-5 shadow-lg ring-1 ring-slate-100">
           {/* TOOLBAR */}
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-            <div className="flex w-full items-center gap-3 rounded-2xl bg-slate-100 px-4 py-3 text-slate-400 xl:max-w-xs">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="flex w-full items-center gap-3 rounded-2xl bg-slate-100 px-4 py-3 text-slate-400 md:max-w-md">
               <FaSearch />
               <input
                 type="text"
-                placeholder="Theo mã, tên, số điện thoại..."
+                placeholder="Tìm kiếm theo mã KH, tên, SĐT, địa chỉ..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="w-full bg-transparent text-sm text-slate-700 outline-none"
@@ -220,15 +153,15 @@ export default function Customers() {
             <div className="flex flex-wrap items-center gap-3">
               <button
                 onClick={() => setShowModal(true)}
-                className="flex items-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-medium text-white hover:bg-blue-700"
+                className="flex items-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-medium text-white hover:bg-blue-700 transition"
               >
                 <FaPlus />
                 Thêm mới
               </button>
 
-              <button className="flex items-center gap-2 rounded-2xl bg-blue-50 px-4 py-3 text-sm font-medium text-blue-700 hover:bg-blue-100">
+              <button className="flex items-center gap-2 rounded-2xl bg-blue-50 px-4 py-3 text-sm font-medium text-blue-700 hover:bg-blue-100 transition">
                 <FaFileExport />
-                Xuất file
+                Xuất danh sách
               </button>
             </div>
           </div>
@@ -240,36 +173,28 @@ export default function Customers() {
                 <tr>
                   <th className="whitespace-nowrap p-4">Mã KH</th>
                   <th className="whitespace-nowrap p-4">Tên khách hàng</th>
-                  <th className="whitespace-nowrap p-4">Điện thoại</th>
+                  <th className="whitespace-nowrap p-4">Số điện thoại</th>
+                  <th className="whitespace-nowrap p-4">Địa chỉ</th> {/* THÊM CỘT ĐỊA CHỈ */}
                   <th className="whitespace-nowrap p-4 text-right">Tổng bán</th>
-                  <th className="whitespace-nowrap p-4 text-right">Nợ hiện tại</th>
-                  <th className="whitespace-nowrap p-4">Nhóm khách</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredCustomers.length > 0 ? (
                   filteredCustomers.map((item) => (
-                    <tr key={item.id} className="border-t border-slate-100 hover:bg-slate-50">
+                    <tr key={item.id} className="border-t border-slate-100 hover:bg-slate-50 transition">
                       <td className="p-4 font-semibold text-slate-800">{item.id}</td>
                       <td className="p-4 font-medium text-blue-600">{item.name}</td>
                       <td className="p-4 text-slate-600">{item.phone}</td>
-                      <td className="p-4 text-right text-slate-800">
+                      <td className="p-4 text-slate-600">{item.address || '-'}</td> {/* HIỂN THỊ ĐỊA CHỈ */}
+                      <td className="p-4 text-right font-semibold text-slate-800">
                         {formatMoney(item.totalSpent)}
-                      </td>
-                      <td className="p-4 text-right font-semibold text-red-500">
-                        {formatMoney(item.debt)}
-                      </td>
-                      <td className="p-4 text-slate-600">
-                        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
-                          {item.group}
-                        </span>
                       </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="6" className="p-10 text-center text-slate-400">
-                      Không có dữ liệu khách hàng
+                    <td colSpan="5" className="p-10 text-center text-slate-400">
+                      Không tìm thấy dữ liệu khách hàng
                     </td>
                   </tr>
                 )}
@@ -285,9 +210,8 @@ export default function Customers() {
             </p>
 
             <div className="flex items-center gap-2">
-              <button className="rounded-xl bg-slate-100 px-3 py-2">1</button>
-              <button className="rounded-xl px-3 py-2 text-slate-500 hover:bg-slate-100">2</button>
-              <button className="rounded-xl px-3 py-2 text-slate-500 hover:bg-slate-100">3</button>
+              <button className="rounded-xl bg-slate-100 px-3 py-2 transition hover:bg-slate-200">1</button>
+              <button className="rounded-xl px-3 py-2 text-slate-500 hover:bg-slate-100 transition">2</button>
             </div>
           </div>
         </div>
@@ -296,7 +220,7 @@ export default function Customers() {
       {/* MODAL ADD CUSTOMER */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm">
-          <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-[28px] bg-white shadow-2xl">
+          <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-[28px] bg-white shadow-2xl animate-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5">
               <div className="flex items-center gap-3">
                 <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
@@ -312,7 +236,7 @@ export default function Customers() {
 
               <button
                 onClick={handleCloseModal}
-                className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-500 hover:bg-slate-200"
+                className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-500 hover:bg-slate-200 transition"
               >
                 <FaTimes />
               </button>
@@ -364,41 +288,27 @@ export default function Customers() {
 
                 {/* RIGHT */}
                 <div className="space-y-5">
-                  <FormRow label="Nhóm khách hàng">
-                    <select
-                      value={formData.group}
-                      onChange={(e) => handleChangeForm('group', e.target.value)}
-                      className="input-line"
-                    >
-                      {groupOptions.map((item) => (
-                        <option key={item} value={item}>
-                          {item}
-                        </option>
-                      ))}
-                    </select>
-                  </FormRow>
-
                   <FormRow label="Giới tính">
                     <div className="flex items-center gap-6 pt-2">
-                      <label className="flex items-center gap-2 text-sm text-slate-700">
+                      <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
                         <input
                           type="radio"
                           name="gender"
                           value="Nam"
                           checked={formData.gender === 'Nam'}
                           onChange={(e) => handleChangeForm('gender', e.target.value)}
-                          className="h-4 w-4 accent-blue-600"
+                          className="h-4 w-4 accent-blue-600 cursor-pointer"
                         />
                         Nam
                       </label>
-                      <label className="flex items-center gap-2 text-sm text-slate-700">
+                      <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
                         <input
                           type="radio"
                           name="gender"
                           value="Nữ"
                           checked={formData.gender === 'Nữ'}
                           onChange={(e) => handleChangeForm('gender', e.target.value)}
-                          className="h-4 w-4 accent-blue-600"
+                          className="h-4 w-4 accent-blue-600 cursor-pointer"
                         />
                         Nữ
                       </label>
@@ -437,7 +347,7 @@ export default function Customers() {
 
                 <button
                   type="submit"
-                  className="rounded-2xl bg-blue-600 px-6 py-3 font-medium text-white transition hover:bg-blue-700"
+                  className="rounded-2xl bg-blue-600 px-6 py-3 font-medium text-white transition hover:bg-blue-700 shadow-lg shadow-blue-600/30"
                 >
                   Lưu thông tin
                 </button>
@@ -447,7 +357,7 @@ export default function Customers() {
         </div>
       )}
 
-      {/* CSS STYLE (Tương tự trang Thuốc) */}
+      {/* CSS STYLE */}
       <style>{`
         .input-line {
           width: 100%;
@@ -458,24 +368,11 @@ export default function Customers() {
           background: transparent;
           color: #0f172a;
           font-size: 15px;
+          transition: border-color 0.2s;
         }
 
         .input-line:focus {
-          border-bottom-color: #2563eb; /* Đổi sang màu blue cho hợp tông Khách hàng */
-        }
-
-        .custom-scrollbar::-webkit-scrollbar {
-          width: 6px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background-color: #cbd5e1;
-          border-radius: 10px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background-color: #94a3b8;
+          border-bottom-color: #2563eb; 
         }
       `}</style>
     </div>

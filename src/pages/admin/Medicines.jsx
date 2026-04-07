@@ -21,6 +21,9 @@ const initialMedicines = [
     group: 'Thuốc kê đơn',
     route: 'Uống',
     location: 'Kệ A1',
+    ingredient: 'Tân di, Ké đầu ngựa, Bạch chỉ...',
+    usage: 'Hỗ trợ điều trị viêm mũi dị ứng, ngạt mũi, chảy nước mũi',
+    dosage: 'Uống 2-3 lần/ngày, mỗi lần 15-20ml sau ăn.',
   },
   {
     id: 'SP000031',
@@ -35,6 +38,9 @@ const initialMedicines = [
     group: 'Thuốc giảm đau',
     route: 'Uống',
     location: 'Kệ A2',
+    ingredient: 'Ibuprofen 400mg',
+    usage: 'Giảm các cơn đau nhẹ đến vừa, chống viêm không steroid',
+    dosage: 'Người lớn: 1 viên/lần x 2-3 lần/ngày. Uống sau ăn no.',
   },
   {
     id: 'SP000030',
@@ -49,6 +55,9 @@ const initialMedicines = [
     group: 'Thuốc dị ứng',
     route: 'Uống',
     location: 'Kệ B1',
+    ingredient: 'Fexofenadine hydrochloride 60mg',
+    usage: 'Điều trị các triệu chứng viêm mũi dị ứng theo mùa, mề đay',
+    dosage: 'Người lớn và trẻ em > 12 tuổi: 1 viên x 2 lần/ngày.',
   },
   {
     id: 'SP000029',
@@ -63,6 +72,9 @@ const initialMedicines = [
     group: 'TPCN',
     route: 'Uống',
     location: 'Kệ C1',
+    ingredient: 'Glucosamine, Chondroitin, MSM',
+    usage: 'Hỗ trợ tái tạo sụn khớp, giảm đau nhức xương khớp',
+    dosage: 'Người lớn: 1-2 viên/ngày sau bữa ăn.',
   },
   {
     id: 'SP000028',
@@ -77,6 +89,9 @@ const initialMedicines = [
     group: 'Thuốc tiêu hóa',
     route: 'Uống',
     location: 'Kệ B3',
+    ingredient: 'Ngưu nhĩ phong, La liễu',
+    usage: 'Hỗ trợ giảm viêm đại tràng cấp và mãn tính, tiêu hóa kém',
+    dosage: 'Pha với nước ấm. Uống 1 gói/lần x 3 lần/ngày.',
   },
 ]
 
@@ -111,13 +126,16 @@ export default function Medicines() {
   const [selectedTypes, setSelectedTypes] = useState([])
   const [selectedGroup, setSelectedGroup] = useState('Tất cả')
   const [showModal, setShowModal] = useState(false)
+  
+  // State quản lý Tab đang mở (info / details)
+  const [activeTab, setActiveTab] = useState('info')
 
   const [formData, setFormData] = useState({
     code: '',
     barcode: '',
     name: '',
     drugCode: '',
-    type: 'Thuốc không kê đơn', // Mặc định là thuốc không kê đơn
+    type: 'Thuốc không kê đơn',
     group: '',
     unit: '',
     route: '',
@@ -127,6 +145,10 @@ export default function Medicines() {
     stock: '',
     weight: '',
     directSale: true,
+    // --- Các trường mới cho Tab Mô tả chi tiết ---
+    ingredient: '',
+    usage: '',
+    dosage: '',
   })
 
   const filteredMedicines = useMemo(() => {
@@ -149,6 +171,7 @@ export default function Medicines() {
 
   const handleCloseModal = () => {
     setShowModal(false)
+    setActiveTab('info') // Reset tab về mặc định
     setFormData({
       code: '',
       barcode: '',
@@ -164,6 +187,9 @@ export default function Medicines() {
       stock: '',
       weight: '',
       directSale: true,
+      ingredient: '',
+      usage: '',
+      dosage: '',
     })
   }
 
@@ -186,7 +212,7 @@ export default function Medicines() {
       id: formData.code || `SP${String(medicines.length + 29).padStart(6, '0')}`,
       name: formData.name,
       unit: formData.unit || 'Chưa xác định',
-      type: formData.type, // Lấy loại hàng từ Form
+      type: formData.type,
       category: formData.group || 'Chưa phân nhóm',
       costPrice: Number(formData.costPrice || 0),
       salePrice: Number(formData.salePrice || 0),
@@ -196,6 +222,9 @@ export default function Medicines() {
       route: formData.route,
       location: formData.location,
       drugCode: formData.drugCode,
+      ingredient: formData.ingredient,
+      usage: formData.usage,
+      dosage: formData.dosage,
     }
 
     setMedicines((prev) => [newItem, ...prev])
@@ -203,8 +232,8 @@ export default function Medicines() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-7xl space-y-6 px-4 py-6">
-      <div className="flex items-end justify-between">
+    <div className="w-full space-y-4 pt-0 animate-in fade-in duration-300">
+      <div className="flex items-end justify-between border-b border-slate-100 pb-4">
         <div>
           <h1 className="text-3xl font-bold text-slate-900">Quản lý thuốc</h1>
           <p className="mt-1 text-sm text-slate-500">
@@ -228,7 +257,7 @@ export default function Medicines() {
               </div>
             </div>
 
-            <div className="custom-scrollbar mt-4 max-h-[360px] space-y-1 overflow-y-auto pr-2">
+            <div className="custom-scrollbar mt-4 max-h-[460px] space-y-1 overflow-y-auto pr-2">
               {groupOptions.map((item) => (
                 <button
                   key={item}
@@ -264,13 +293,13 @@ export default function Medicines() {
             <div className="flex flex-wrap items-center gap-3">
               <button
                 onClick={() => setShowModal(true)}
-                className="flex items-center gap-2 rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-medium text-white hover:bg-emerald-700"
+                className="flex items-center gap-2 rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-medium text-white hover:bg-emerald-700 shadow-lg shadow-emerald-600/30 transition"
               >
                 <FaPlus />
                 Thêm mới
               </button>
 
-              <button className="flex items-center gap-2 rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700 hover:bg-emerald-100">
+              <button className="flex items-center gap-2 rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700 hover:bg-emerald-100 transition">
                 <FaFileExport />
                 Xuất file
               </button>
@@ -285,24 +314,24 @@ export default function Medicines() {
                   <th className="whitespace-nowrap p-4">Mã hàng</th>
                   <th className="whitespace-nowrap p-4">Tên hàng</th>
                   <th className="whitespace-nowrap p-4">Đơn vị</th>
-                  <th className="whitespace-nowrap p-4">Giá vốn</th>
-                  <th className="whitespace-nowrap p-4">Giá bán</th>
+                  <th className="whitespace-nowrap p-4 text-right">Giá vốn</th>
+                  <th className="whitespace-nowrap p-4 text-right">Giá bán</th>
                   <th className="whitespace-nowrap p-4">Loại hàng</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredMedicines.length > 0 ? (
                   filteredMedicines.map((item) => (
-                    <tr key={item.id} className="border-t border-slate-100 hover:bg-slate-50">
+                    <tr key={item.id} className="border-t border-slate-100 hover:bg-slate-50 transition">
                       <td className="p-4 font-semibold text-slate-800">{item.id}</td>
-                      <td className="p-4 text-slate-700">{item.name}</td>
+                      <td className="p-4 text-slate-700 font-medium">{item.name}</td>
                       <td className="p-4 text-slate-600">{item.unit}</td>
-                      <td className="p-4 text-slate-600">{formatMoney(item.costPrice)}</td>
-                      <td className="p-4 font-semibold text-slate-800">
+                      <td className="p-4 text-slate-600 text-right">{formatMoney(item.costPrice)}</td>
+                      <td className="p-4 font-semibold text-slate-800 text-right">
                         {formatMoney(item.salePrice)}
                       </td>
-                      <td className="p-4 text-slate-600">
-                        <span className={`inline-block rounded-full px-3 py-1 text-xs font-medium ${item.type === 'Thuốc kê đơn' ? 'bg-orange-50 text-orange-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                      <td className="p-4">
+                        <span className={`inline-block rounded-full px-3 py-1 text-xs font-semibold ${item.type === 'Thuốc kê đơn' ? 'bg-orange-50 text-orange-600' : 'bg-emerald-50 text-emerald-600'}`}>
                           {item.type}
                         </span>
                       </td>
@@ -327,8 +356,7 @@ export default function Medicines() {
 
             <div className="flex items-center gap-2">
               <button className="rounded-xl bg-slate-100 px-3 py-2">1</button>
-              <button className="rounded-xl px-3 py-2 text-slate-500 hover:bg-slate-100">2</button>
-              <button className="rounded-xl px-3 py-2 text-slate-500 hover:bg-slate-100">3</button>
+              <button className="rounded-xl px-3 py-2 text-slate-500 hover:bg-slate-100 transition">2</button>
             </div>
           </div>
         </div>
@@ -337,10 +365,10 @@ export default function Medicines() {
       {/* MODAL ADD DRUG */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm">
-          <div className="max-h-[90vh] w-full max-w-6xl overflow-y-auto rounded-[28px] bg-white shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5">
+          <div className="max-h-[90vh] w-full max-w-5xl overflow-hidden rounded-[28px] bg-white shadow-2xl flex flex-col animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5 shrink-0">
               <div>
-                <h2 className="text-2xl font-bold text-slate-900">Thêm thuốc</h2>
+                <h2 className="text-2xl font-bold text-slate-900">Thêm thuốc mới</h2>
                 <p className="mt-1 text-sm text-slate-500">
                   Nhập thông tin thuốc, giá bán và thông tin phân loại
                 </p>
@@ -348,175 +376,198 @@ export default function Medicines() {
 
               <button
                 onClick={handleCloseModal}
-                className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-500 hover:bg-slate-200"
+                className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-500 hover:bg-slate-200 transition"
               >
                 <FaTimes />
               </button>
             </div>
 
-            <div className="border-b border-slate-100 px-6 pt-4">
+            {/* TAB BUTTONS */}
+            <div className="border-b border-slate-100 bg-slate-50/50 px-6 pt-4 shrink-0">
               <div className="flex gap-8">
-                <button className="border-b-2 border-emerald-500 pb-3 text-sm font-semibold text-emerald-600">
-                  Thông tin
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('info')}
+                  className={`pb-3 text-sm font-semibold transition-colors ${
+                    activeTab === 'info'
+                      ? 'border-b-2 border-emerald-500 text-emerald-600'
+                      : 'text-slate-400 hover:text-slate-600 border-b-2 border-transparent'
+                  }`}
+                >
+                  Thông tin cơ bản
                 </button>
-                <button className="pb-3 text-sm text-slate-400">Mô tả chi tiết</button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('details')}
+                  className={`pb-3 text-sm font-semibold transition-colors ${
+                    activeTab === 'details'
+                      ? 'border-b-2 border-emerald-500 text-emerald-600'
+                      : 'text-slate-400 hover:text-slate-600 border-b-2 border-transparent'
+                  }`}
+                >
+                  Mô tả chi tiết (POS)
+                </button>
               </div>
             </div>
 
-            <form onSubmit={handleSubmitMedicine} className="p-6">
-              <div className="grid grid-cols-1 gap-8 xl:grid-cols-2">
-                {/* LEFT */}
-                <div className="space-y-5">
-                  <FormRow label="Mã hàng">
-                    <input
-                      value={formData.code}
-                      onChange={(e) => handleChangeForm('code', e.target.value)}
-                      placeholder="Mã hàng tự động"
-                      className="input-line"
-                    />
-                  </FormRow>
+            <div className="overflow-y-auto flex-1 p-6 custom-scrollbar">
+              <form id="medicineForm" onSubmit={handleSubmitMedicine}>
+                {/* --- TAB THÔNG TIN CƠ BẢN --- */}
+                {activeTab === 'info' && (
+                  <div className="grid grid-cols-1 gap-8 xl:grid-cols-2">
+                    {/* LEFT */}
+                    <div className="space-y-6">
+                      <FormRow label="Tên thuốc (*)">
+                        <input
+                          value={formData.name}
+                          onChange={(e) => handleChangeForm('name', e.target.value)}
+                          placeholder="Paracetamol 500 mg"
+                          className="input-line font-medium text-slate-800"
+                        />
+                      </FormRow>
 
-                  <FormRow label="Mã vạch">
-                    <input
-                      value={formData.barcode}
-                      onChange={(e) => handleChangeForm('barcode', e.target.value)}
-                      placeholder="Nhập mã vạch"
-                      className="input-line"
-                    />
-                  </FormRow>
+                      <FormRow label="Mã thuốc">
+                        <input
+                          value={formData.drugCode}
+                          onChange={(e) => handleChangeForm('drugCode', e.target.value)}
+                          placeholder="Mã số đăng ký (VD: VD-12345-19)"
+                          className="input-line"
+                        />
+                      </FormRow>
 
-                  <FormRow label="Tên thuốc">
-                    <input
-                      value={formData.name}
-                      onChange={(e) => handleChangeForm('name', e.target.value)}
-                      placeholder="Paracetamol 500 mg"
-                      className="input-line"
-                    />
-                  </FormRow>
-
-                  <FormRow label="Mã thuốc">
-                    <input
-                      value={formData.drugCode}
-                      onChange={(e) => handleChangeForm('drugCode', e.target.value)}
-                      placeholder="DQG00001536"
-                      className="input-line"
-                    />
-                  </FormRow>
-
-                  <FormRow label="Loại hàng">
-                    <select
-                      value={formData.type}
-                      onChange={(e) => handleChangeForm('type', e.target.value)}
-                      className="input-line"
-                    >
-                      <option value="Thuốc không kê đơn">Thuốc không kê đơn</option>
-                      <option value="Thuốc kê đơn">Thuốc kê đơn</option>
-                    </select>
-                  </FormRow>
-
-                  <FormRow label="Nhóm thuốc">
-                    <select
-                      value={formData.group}
-                      onChange={(e) => handleChangeForm('group', e.target.value)}
-                      className="input-line"
-                    >
-                      <option value="">---Lựa chọn nhóm---</option>
-                      {groupOptions.map((item) => (
-                        <option key={item} value={item}>
-                          {item}
-                        </option>
-                      ))}
-                    </select>
-                  </FormRow>
-
-                  <div>
-                    <label className="mb-3 block text-sm font-medium text-slate-700">
-                      Hình ảnh
-                    </label>
-
-                    <div className="grid grid-cols-3 gap-3 md:grid-cols-5">
-                      {[1, 2, 3, 4, 5].map((item) => (
-                        <div
-                          key={item}
-                          className="flex aspect-square items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 text-xs text-slate-400"
+                      <FormRow label="Loại hàng">
+                        <select
+                          value={formData.type}
+                          onChange={(e) => handleChangeForm('type', e.target.value)}
+                          className="input-line"
                         >
-                          Ảnh
-                        </div>
-                      ))}
+                          <option value="Thuốc không kê đơn">Thuốc không kê đơn</option>
+                          <option value="Thuốc kê đơn">Thuốc kê đơn</option>
+                        </select>
+                      </FormRow>
+
+                      <FormRow label="Nhóm thuốc">
+                        <select
+                          value={formData.group}
+                          onChange={(e) => handleChangeForm('group', e.target.value)}
+                          className="input-line"
+                        >
+                          <option value="">---Lựa chọn nhóm---</option>
+                          {groupOptions.map((item) => (
+                            <option key={item} value={item}>
+                              {item}
+                            </option>
+                          ))}
+                        </select>
+                      </FormRow>
+                    </div>
+
+                    {/* RIGHT */}
+                    <div className="space-y-6">
+                      <FormRow label="Đơn vị đóng gói">
+                        <input
+                          type="text"
+                          value={formData.unit}
+                          onChange={(e) => handleChangeForm('unit', e.target.value)}
+                          placeholder="Viên, vỉ, hộp, lọ..."
+                          className="input-line"
+                        />
+                      </FormRow>
+
+                      <FormRow label="Số lượng tồn">
+                        <input
+                          type="number"
+                          value={formData.stock}
+                          onChange={(e) => handleChangeForm('stock', e.target.value)}
+                          placeholder="0"
+                          className="input-line text-right font-medium"
+                        />
+                      </FormRow>
+
+                      <FormRow label="Giá vốn">
+                        <input
+                          type="number"
+                          value={formData.costPrice}
+                          onChange={(e) => handleChangeForm('costPrice', e.target.value)}
+                          placeholder="0"
+                          className="input-line text-right font-medium text-slate-600"
+                        />
+                      </FormRow>
+
+                      <FormRow label="Giá bán (*)">
+                        <input
+                          type="number"
+                          value={formData.salePrice}
+                          onChange={(e) => handleChangeForm('salePrice', e.target.value)}
+                          placeholder="0"
+                          className="input-line text-right font-bold text-blue-600"
+                        />
+                      </FormRow>
                     </div>
                   </div>
-                </div>
+                )}
 
-                {/* RIGHT */}
-                <div className="space-y-5">
-                  <FormRow label="Đơn vị đóng gói">
-                    <input
-                      type="text"
-                      value={formData.unit}
-                      onChange={(e) => handleChangeForm('unit', e.target.value)}
-                      placeholder="Viên, vỉ, hộp, lọ..."
-                      className="input-line"
-                    />
-                  </FormRow>
+                {/* --- TAB MÔ TẢ CHI TIẾT --- */}
+                {activeTab === 'details' && (
+                  <div className="space-y-6 max-w-4xl">
+                    <div className="rounded-2xl bg-blue-50/50 p-4 border border-blue-100">
+                      <p className="text-sm text-blue-700 italic">
+                        * Những thông tin dưới đây sẽ được hiển thị cho nhân viên bán hàng trong hệ thống POS khi họ tra cứu chi tiết sản phẩm.
+                      </p>
+                    </div>
 
-                  <FormRow label="Số lượng">
-                    <input
-                      type="number"
-                      value={formData.stock}
-                      onChange={(e) => handleChangeForm('stock', e.target.value)}
-                      placeholder="0"
-                      className="input-line text-right"
-                    />
-                  </FormRow>
+                    <div className="space-y-2">
+                      <label className="text-sm font-semibold text-slate-800">Thành phần chính</label>
+                      <textarea
+                        value={formData.ingredient}
+                        onChange={(e) => handleChangeForm('ingredient', e.target.value)}
+                        placeholder="VD: Paracetamol 500mg, Caffeine 65mg..."
+                        className="textarea-box"
+                      />
+                    </div>
 
-                  <FormRow label="Giá vốn">
-                    <input
-                      type="number"
-                      value={formData.costPrice}
-                      onChange={(e) => handleChangeForm('costPrice', e.target.value)}
-                      placeholder="0"
-                      className="input-line text-right"
-                    />
-                  </FormRow>
+                    <div className="space-y-2">
+                      <label className="text-sm font-semibold text-slate-800">Công dụng / Chỉ định</label>
+                      <textarea
+                        value={formData.usage}
+                        onChange={(e) => handleChangeForm('usage', e.target.value)}
+                        placeholder="VD: Giảm đau đầu, đau nhức cơ bắp, hạ sốt nhanh..."
+                        className="textarea-box"
+                      />
+                    </div>
 
-                  <FormRow label="Giá bán">
-                    <input
-                      type="number"
-                      value={formData.salePrice}
-                      onChange={(e) => handleChangeForm('salePrice', e.target.value)}
-                      placeholder="0"
-                      className="input-line text-right"
-                    />
-                  </FormRow>
+                    <div className="space-y-2">
+                      <label className="text-sm font-semibold text-slate-800">Liều dùng & Cách dùng</label>
+                      <textarea
+                        value={formData.dosage}
+                        onChange={(e) => handleChangeForm('dosage', e.target.value)}
+                        placeholder="VD: Người lớn uống 1-2 viên/lần, ngày không quá 4 lần. Uống sau khi ăn..."
+                        className="textarea-box"
+                      />
+                    </div>
+                  </div>
+                )}
+              </form>
+            </div>
 
-                  <FormRow label="Trọng lượng">
-                    <input
-                      value={formData.weight}
-                      onChange={(e) => handleChangeForm('weight', e.target.value)}
-                      placeholder="Nhập trọng lượng"
-                      className="input-line"
-                    />
-                  </FormRow>
-                </div>
-              </div>
+            {/* FOOTER NÚT BẤM */}
+            <div className="flex items-center justify-end gap-3 border-t border-slate-100 p-6 shrink-0 bg-white">
+              <button
+                type="button"
+                onClick={handleCloseModal}
+                className="rounded-2xl bg-slate-100 px-6 py-3 font-medium text-slate-600 hover:bg-slate-200 transition"
+              >
+                Hủy
+              </button>
 
-              <div className="mt-8 flex items-center justify-end gap-3 border-t border-slate-100 pt-6">
-                <button
-                  type="button"
-                  onClick={handleCloseModal}
-                  className="rounded-2xl bg-slate-100 px-5 py-3 font-medium text-slate-600 hover:bg-slate-200"
-                >
-                  Hủy
-                </button>
-
-                <button
-                  type="submit"
-                  className="rounded-2xl bg-emerald-600 px-5 py-3 font-medium text-white hover:bg-emerald-700"
-                >
-                  Lưu thuốc
-                </button>
-              </div>
-            </form>
+              <button
+                type="submit"
+                form="medicineForm" // Liên kết nút ngoài form vào form bằng ID
+                className="rounded-2xl bg-emerald-600 px-6 py-3 font-medium text-white hover:bg-emerald-700 transition shadow-lg shadow-emerald-600/30"
+              >
+                Lưu thuốc
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -531,10 +582,39 @@ export default function Medicines() {
           background: transparent;
           color: #0f172a;
           font-size: 15px;
+          transition: border-color 0.2s;
         }
 
         .input-line:focus {
           border-bottom-color: #10b981;
+        }
+
+        /* Khung nhập text nhiều dòng */
+        .textarea-box {
+          width: 100%;
+          border: 1px solid #cbd5e1;
+          border-radius: 12px;
+          padding: 14px;
+          outline: none;
+          background: #f8fafc;
+          color: #0f172a;
+          font-size: 14.5px;
+          min-height: 90px;
+          resize: vertical;
+          transition: all 0.2s;
+        }
+
+        .textarea-box:focus {
+          border-color: #10b981;
+          background: #ffffff;
+          box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.1);
+        }
+
+        /* Xóa mũi tên input number */
+        input[type=number]::-webkit-inner-spin-button,
+        input[type=number]::-webkit-outer-spin-button {
+          -webkit-appearance: none;
+          margin: 0;
         }
 
         /* Làm đẹp thanh cuộn */
@@ -558,7 +638,7 @@ export default function Medicines() {
 
 function FormRow({ label, children }) {
   return (
-    <div className="grid grid-cols-1 gap-3 md:grid-cols-[140px_minmax(0,1fr)] md:items-center">
+    <div className="grid grid-cols-1 gap-2 md:grid-cols-[140px_minmax(0,1fr)] md:items-center">
       <label className="text-sm font-medium text-slate-700">{label}</label>
       <div>{children}</div>
     </div>

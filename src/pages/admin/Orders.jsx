@@ -17,7 +17,6 @@ const initialOrders = [
     date: '06/04/2026 14:30',
     total: 1944000,
     status: 'Hoàn thành',
-    paymentMethod: 'Chuyển khoản',
     items: [
       { id: 'SP02', name: 'Telfast BD', unit: 'Viên', qty: 12, price: 162000, total: 1944000 },
     ],
@@ -29,7 +28,6 @@ const initialOrders = [
     date: '06/04/2026 10:15',
     total: 750000,
     status: 'Hoàn thành',
-    paymentMethod: 'Tiền mặt',
     items: [
       { id: 'SP01', name: 'Panadol Extra', unit: 'Vỉ', qty: 50, price: 15000, total: 750000 },
     ],
@@ -41,7 +39,6 @@ const initialOrders = [
     date: '05/04/2026 16:45',
     total: 500000,
     status: 'Đang xử lý',
-    paymentMethod: 'Chưa thanh toán',
     items: [
       { id: 'SP04', name: 'Oresol', unit: 'Gói', qty: 100, price: 5000, total: 500000 },
     ],
@@ -53,7 +50,6 @@ const initialOrders = [
     date: '05/04/2026 09:20',
     total: 197500,
     status: 'Đã hủy',
-    paymentMethod: '-',
     items: [
       { id: 'SP05', name: 'Ibuprofen 400mg', unit: 'Viên', qty: 25, price: 7900, total: 197500 },
     ],
@@ -259,11 +255,10 @@ export default function Orders() {
                   <p className="text-sm text-slate-600">{selectedOrder.phone || 'Không có SĐT'}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-xs text-slate-500">Trạng thái & Thanh toán</p>
-                  <p className={`mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${getStatusBadge(selectedOrder.status)}`}>
+                  <p className="text-xs text-slate-500 mb-1">Trạng thái</p>
+                  <span className={`inline-block rounded-full px-3 py-1 text-xs font-semibold ${getStatusBadge(selectedOrder.status)}`}>
                     {selectedOrder.status}
-                  </p>
-                  <p className="mt-1 text-sm text-slate-600">{selectedOrder.paymentMethod}</p>
+                  </span>
                 </div>
               </div>
 
