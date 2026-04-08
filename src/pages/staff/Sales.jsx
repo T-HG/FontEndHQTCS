@@ -10,7 +10,9 @@ import {
   FaFileInvoice,
   FaTimes,
   FaEye,
-  FaCartPlus
+  FaCartPlus,
+  FaExclamationTriangle,
+  FaCheckCircle
 } from 'react-icons/fa'
 
 // --- DỮ LIỆU MẪU ---
@@ -44,6 +46,31 @@ export default function Sales() {
 
   // State lưu thông tin thuốc đang được chọn để hiển thị Modal
   const [selectedMedicine, setSelectedMedicine] = useState(null)
+
+  // --- STATE POPUP CẢNH BÁO / XÁC NHẬN ---
+  const [dialog, setDialog] = useState({
+    isOpen: false,
+    type: 'alert', // 'alert' | 'confirm' | 'success'
+    title: '',
+    message: '',
+    onConfirm: null,
+  })
+
+  const showAlert = (title, message) => {
+    setDialog({ isOpen: true, type: 'alert', title, message, onConfirm: null })
+  }
+
+  const showSuccess = (title, message, onConfirmCallback) => {
+    setDialog({ isOpen: true, type: 'success', title, message, onConfirm: onConfirmCallback })
+  }
+
+  const showConfirm = (title, message, onConfirmCallback) => {
+    setDialog({ isOpen: true, type: 'confirm', title, message, onConfirm: onConfirmCallback })
+  }
+
+  const closeDialog = () => {
+    setDialog((prev) => ({ ...prev, isOpen: false }))
+  }
   
   const filteredMedicines = useMemo(() => {
     const keyword = searchQuery.trim().toLowerCase()
@@ -93,19 +120,34 @@ export default function Sales() {
   }
 
   const handleClearCart = () => {
-    if (window.confirm('Bạn có chắc muốn hủy đơn hàng hiện tại?')) {
-      resetForm()
-    }
+    showConfirm(
+      'Hủy đơn hàng',
+      'Bạn có chắc chắn muốn hủy đơn hàng hiện tại? Toàn bộ sản phẩm trong giỏ sẽ bị xóa.',
+      () => {
+        resetForm()
+        closeDialog()
+      }
+    )
   }
 
   const handleCheckout = () => {
     if (cart.length === 0) {
-      alert('Giỏ hàng đang trống!')
+      showAlert('Cảnh báo', 'Giỏ hàng đang trống! Vui lòng chọn sản phẩm trước khi thanh toán.')
       return
     }
     const finalCustomer = customerName.trim() || 'Khách lẻ'
-    alert(`Thanh toán thành công ${invoiceId}!\nKhách hàng: ${finalCustomer}\nSĐT: ${customerPhone || 'Không có'}\nTổng tiền: ${formatMoney(totalPrice)}`)
-    resetForm()
+    
+    // Tạo nội dung chi tiết hóa đơn
+    const billDetails = `Hóa đơn: ${invoiceId}\nKhách hàng: ${finalCustomer}\nSố điện thoại: ${customerPhone || 'Không có'}\nTổng tiền thanh toán: ${formatMoney(totalPrice)}`
+
+    showSuccess(
+      'Thanh toán thành công!',
+      billDetails,
+      () => {
+        resetForm()
+        closeDialog()
+      }
+    )
   }
 
   const totalItems = cart.reduce((sum, item) => sum + (Number(item.qty) || 0), 0)
@@ -276,7 +318,7 @@ export default function Sales() {
 
       {/* MODAL HIỂN THỊ CHI TIẾT THUỐC */}
       {selectedMedicine && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm">
           <div className="w-full max-w-md overflow-hidden rounded-[28px] bg-white shadow-2xl animate-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-6 py-4">
               <h2 className="text-lg font-bold text-slate-900">Chi tiết sản phẩm</h2>
@@ -316,6 +358,52 @@ export default function Sales() {
                   <p className="leading-relaxed text-slate-600">{selectedMedicine.usage}</p>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- CUSTOM POPUP (THAY THẾ ALERT/CONFIRM) --- */}
+      {dialog.isOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-sm overflow-hidden rounded-[24px] bg-white shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="p-6 text-center">
+              <div 
+                className={`mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full ${
+                  dialog.type === 'success' 
+                    ? 'bg-emerald-100 text-emerald-600' 
+                    : dialog.type === 'confirm' 
+                      ? 'bg-red-100 text-red-600' 
+                      : 'bg-yellow-100 text-yellow-600'
+                }`}
+              >
+                {dialog.type === 'success' ? <FaCheckCircle size={32} /> : <FaExclamationTriangle size={28} />}
+              </div>
+              <h3 className="text-xl font-bold text-slate-900">{dialog.title}</h3>
+              <p className="mt-3 text-sm text-slate-500 leading-relaxed whitespace-pre-line text-left bg-slate-50 p-3 rounded-xl border border-slate-100 inline-block w-full">
+                {dialog.message}
+              </p>
+            </div>
+
+            <div className="flex gap-3 bg-slate-50 p-4">
+              {dialog.type === 'confirm' ? (
+                <>
+                  <button onClick={closeDialog} className="flex-1 rounded-xl bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm border border-slate-200 hover:bg-slate-50 transition">
+                    Bỏ qua
+                  </button>
+                  <button onClick={dialog.onConfirm} className="flex-1 rounded-xl bg-red-600 px-4 py-3 text-sm font-medium text-white shadow-sm hover:bg-red-700 transition">
+                    Hủy đơn
+                  </button>
+                </>
+              ) : dialog.type === 'success' ? (
+                <button onClick={dialog.onConfirm || closeDialog} className="w-full rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white shadow-sm hover:bg-emerald-700 transition">
+                  Hoàn tất
+                </button>
+              ) : (
+                <button onClick={closeDialog} className="w-full rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white shadow-sm hover:bg-blue-700 transition">
+                  Đã hiểu
+                </button>
+              )}
             </div>
           </div>
         </div>

@@ -296,10 +296,6 @@ export default function Orders() {
                     <span>Tổng tiền hàng:</span>
                     <span>{formatMoney(selectedOrder.total)}</span>
                   </div>
-                  <div className="flex justify-between text-sm text-slate-600">
-                    <span>Giảm giá:</span>
-                    <span>0 đ</span>
-                  </div>
                   <div className="flex justify-between border-t border-slate-200 pt-2 text-base font-bold text-slate-800">
                     <span>Khách cần trả:</span>
                     <span className="text-blue-600">{formatMoney(selectedOrder.total)}</span>
@@ -308,7 +304,6 @@ export default function Orders() {
               </div>
             </div>
 
-            {/* Footer Modal (Nút in/Xong) */}
             <div className="flex items-center justify-end gap-3 border-t border-slate-100 px-6 py-4">
               <button className="flex items-center gap-2 rounded-xl bg-slate-100 px-4 py-2.5 font-medium text-slate-600 hover:bg-slate-200">
                 <FaPrint />

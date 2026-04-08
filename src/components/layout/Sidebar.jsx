@@ -71,29 +71,6 @@ export default function Sidebar() {
           </NavLink>
         ))}
       </nav>
-
-      <div className="mt-6 rounded-[28px] bg-white/15 p-4 shadow-lg backdrop-blur">
-        <div className="mb-4 flex items-center gap-2 text-white/90">
-          <FaCog />
-          <span className="font-medium">Trạng thái hệ thống</span>
-        </div>
-
-        <div className="space-y-3 text-sm">
-          <div className="flex items-center justify-between rounded-xl bg-white/10 px-3 py-2">
-            <span>Máy chủ</span>
-            <span className="rounded-full bg-emerald-400/20 px-2 py-1 text-emerald-100">
-              Online
-            </span>
-          </div>
-
-          <div className="flex items-center justify-between rounded-xl bg-white/10 px-3 py-2">
-            <span>Đồng bộ kho</span>
-            <span className="rounded-full bg-yellow-300/20 px-2 py-1 text-yellow-100">
-              Ổn định
-            </span>
-          </div>
-        </div>
-      </div>
     </aside>
   )
 }
