@@ -1,4 +1,6 @@
 import { useState, useMemo } from 'react'
+import { useInventoryAlerts } from '../../context/InventoryAlertContext'
+import { useSetPageHeader } from '../../context/PageHeaderContext'
 import {
   FaSearch,
   FaUserPlus,
@@ -15,17 +17,49 @@ import {
   FaCheckCircle
 } from 'react-icons/fa'
 
-// --- DỮ LIỆU MẪU ---
-const mockMedicines = [
-  { id: 'SP001', name: 'Panadol Extra', unit: 'Vỉ', price: 15000, stock: 120, category: 'Giảm đau', ingredient: 'Paracetamol 500mg, Caffeine 65mg', usage: 'Giảm đau đầu, đau răng, hạ sốt nhanh' },
-  { id: 'SP002', name: 'Telfast BD 60mg', unit: 'Viên', price: 162000, stock: 50, category: 'Dị ứng', ingredient: 'Fexofenadine hydrochloride 60mg', usage: 'Điều trị các triệu chứng viêm mũi dị ứng, mề đay vô căn' },
-  { id: 'SP003', name: 'Vitamin C 500mg', unit: 'Hộp', price: 85000, stock: 30, category: 'Bổ sung', ingredient: 'Acid Ascorbic 500mg', usage: 'Bổ sung vitamin C, tăng cường sức đề kháng cho cơ thể' },
-  { id: 'SP004', name: 'Oresol vị cam', unit: 'Gói', price: 5000, stock: 200, category: 'Tiêu hóa', ingredient: 'Glucose khan, Natri clorid, Kali clorid', usage: 'Bù nước và điện giải trong các trường hợp tiêu chảy, sốt cao' },
-  { id: 'SP005', name: 'Ibuprofen 400mg', unit: 'Viên', price: 7900, stock: 100, category: 'Giảm đau', ingredient: 'Ibuprofen 400mg', usage: 'Giảm các cơn đau nhẹ đến vừa, chống viêm không steroid' },
-  { id: 'SP006', name: 'Tràng Vị Khang', unit: 'Hộp', price: 90000, stock: 15, category: 'Tiêu hóa', ingredient: 'Chiết xuất thảo dược tự nhiên (Ngưu nhĩ phong, La liễu)', usage: 'Hỗ trợ giảm viêm đại tràng cấp và mãn tính, tiêu hóa kém' },
-  { id: 'SP007', name: 'Nước muối sinh lý', unit: 'Chai', price: 6000, stock: 500, category: 'Mắt mũi', ingredient: 'Natri clorid 0.9%', usage: 'Rửa mắt, mũi, súc miệng kháng khuẩn hàng ngày' },
-  { id: 'SP008', name: 'Khẩu trang y tế', unit: 'Hộp', price: 35000, stock: 80, category: 'Vật tư', ingredient: 'Vải không dệt 4 lớp, giấy kháng khuẩn', usage: 'Lọc bụi mịn, kháng khuẩn, bảo vệ đường hô hấp' },
-]
+const priceMap = {
+  SP001: 15000,
+  SP002: 162000,
+  SP003: 85000,
+  SP004: 5000,
+  SP005: 7900,
+  SP006: 90000,
+  SP007: 6000,
+  SP008: 35000,
+}
+
+const categoryMap = {
+  SP001: 'Giảm đau',
+  SP002: 'Dị ứng',
+  SP003: 'Bổ sung',
+  SP004: 'Tiêu hóa',
+  SP005: 'Giảm đau',
+  SP006: 'Tiêu hóa',
+  SP007: 'Mắt mũi',
+  SP008: 'Vật tư',
+}
+
+const ingredientMap = {
+  SP001: 'Paracetamol 500mg, Caffeine 65mg',
+  SP002: 'Fexofenadine hydrochloride 60mg',
+  SP003: 'Acid Ascorbic 500mg',
+  SP004: 'Glucose khan, Natri clorid, Kali clorid',
+  SP005: 'Ibuprofen 400mg',
+  SP006: 'Chiết xuất thảo dược tự nhiên (Ngưu nhĩ phong, La liễu)',
+  SP007: 'Natri clorid 0.9%',
+  SP008: 'Vải không dệt 4 lớp, giấy kháng khuẩn',
+}
+
+const usageMap = {
+  SP001: 'Giảm đau đầu, đau răng, hạ sốt nhanh',
+  SP002: 'Điều trị các triệu chứng viêm mũi dị ứng, mề đay vô căn',
+  SP003: 'Bổ sung vitamin C, tăng cường sức đề kháng cho cơ thể',
+  SP004: 'Bù nước và điện giải trong các trường hợp tiêu chảy, sốt cao',
+  SP005: 'Giảm các cơn đau nhẹ đến vừa, chống viêm không steroid',
+  SP006: 'Hỗ trợ giảm viêm đại tràng cấp và mãn tính, tiêu hóa kém',
+  SP007: 'Rửa mắt, mũi, súc miệng kháng khuẩn hàng ngày',
+  SP008: 'Lọc bụi mịn, kháng khuẩn, bảo vệ đường hô hấp',
+}
 
 function formatMoney(value) {
   return new Intl.NumberFormat('vi-VN').format(Number(value || 0)) + ' đ'
@@ -35,7 +69,19 @@ function formatMoney(value) {
 const generateInvoiceId = () => `HD${Math.floor(100000 + Math.random() * 900000)}`
 
 export default function Sales() {
-  const [medicines] = useState(mockMedicines)
+  useSetPageHeader('Bán hàng tại quầy', 'Tìm kiếm sản phẩm và thanh toán nhanh chóng')
+  const { medicines: inventoryMedicines, addOrder, consumeStock } = useInventoryAlerts()
+  const medicines = useMemo(
+    () =>
+      inventoryMedicines.map((item) => ({
+        ...item,
+        price: priceMap[item.id] || 0,
+        category: categoryMap[item.id] || 'Khác',
+        ingredient: ingredientMap[item.id] || 'Chưa cập nhật',
+        usage: usageMap[item.id] || 'Chưa cập nhật',
+      })),
+    [inventoryMedicines],
+  )
   const [searchQuery, setSearchQuery] = useState('')
   const [cart, setCart] = useState([])
   
@@ -81,12 +127,35 @@ export default function Sales() {
     )
   }, [searchQuery, medicines])
 
+  const cartQtyByMedicine = useMemo(() => {
+    return cart.reduce((acc, item) => {
+      acc[item.id] = (acc[item.id] || 0) + (Number(item.qty) || 0)
+      return acc
+    }, {})
+  }, [cart])
+
+  const getAvailableStock = (medicineId, baseStock) => {
+    const reserved = cartQtyByMedicine[medicineId] || 0
+    return Math.max(0, Number(baseStock || 0) - reserved)
+  }
+
   const handleAddToCart = (med) => {
+    const availableStock = getAvailableStock(med.id, med.stock)
+    if (availableStock <= 0) {
+      showAlert('Hết hàng', `${med.name} hiện không còn tồn kho.`)
+      return
+    }
+
     setCart((prev) => {
       const existingItem = prev.find((item) => item.id === med.id)
       if (existingItem) {
+        const nextQty = (Number(existingItem.qty) || 0) + 1
+        if (nextQty > Number(med.stock || 0)) {
+          showAlert('Không đủ tồn kho', `${med.name} chỉ còn ${med.stock} ${med.unit} trong kho.`)
+          return prev
+        }
         return prev.map((item) =>
-          item.id === med.id ? { ...item, qty: (Number(item.qty) || 0) + 1 } : item
+          item.id === med.id ? { ...item, qty: nextQty } : item
         )
       }
       return [...prev, { ...med, qty: 1 }]
@@ -95,12 +164,20 @@ export default function Sales() {
   }
 
   const handleUpdateQty = (id, newQty) => {
+    const medicine = medicines.find((m) => m.id === id)
     setCart((prev) =>
       prev.map((item) => {
         if (item.id === id) {
           if (newQty === '') return { ...item, qty: '' }
           const parsed = parseInt(newQty, 10)
           if (isNaN(parsed) || parsed < 1) return item
+          if (medicine && parsed > Number(medicine.stock || 0)) {
+            showAlert(
+              'Không đủ tồn kho',
+              `${medicine.name} chỉ còn ${medicine.stock} ${medicine.unit} trong kho.`,
+            )
+            return item
+          }
           return { ...item, qty: parsed }
         }
         return item
@@ -137,6 +214,36 @@ export default function Sales() {
     }
     const finalCustomer = customerName.trim() || 'Khách lẻ'
     
+    const currentUser = JSON.parse(localStorage.getItem('user') || 'null')
+    const orderItems = cart.map((item) => ({
+      id: item.id,
+      name: item.name,
+      unit: item.unit,
+      qty: Number(item.qty) || 0,
+      price: Number(item.price) || 0,
+      total: (Number(item.qty) || 0) * (Number(item.price) || 0),
+    }))
+
+    const stockResult = consumeStock(orderItems)
+    if (!stockResult.ok) {
+      const detail = stockResult.shortages
+        .map((item) => `${item.name}: cần ${item.requested}, còn ${item.available}`)
+        .join('\n')
+      showAlert('Không đủ tồn kho để thanh toán', detail)
+      return
+    }
+
+    addOrder({
+      id: invoiceId,
+      customerName: finalCustomer,
+      phone: customerPhone || '',
+      total: totalPrice,
+      status: 'Hoàn thành',
+      createdBy: currentUser?.name || 'Nhân viên',
+      createdAt: new Date().toISOString(),
+      items: orderItems,
+    })
+
     // Tạo nội dung chi tiết hóa đơn
     const billDetails = `Hóa đơn: ${invoiceId}\nKhách hàng: ${finalCustomer}\nSố điện thoại: ${customerPhone || 'Không có'}\nTổng tiền thanh toán: ${formatMoney(totalPrice)}`
 
@@ -154,14 +261,7 @@ export default function Sales() {
   const totalPrice = cart.reduce((sum, item) => sum + item.price * (Number(item.qty) || 0), 0)
 
   return (
-    <div className="mx-auto w-full max-w-7xl space-y-4 pt-0 animate-in fade-in duration-300">
-      <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900">Bán hàng tại quầy</h1>
-          <p className="mt-1 text-sm text-slate-500">Tìm kiếm sản phẩm và thanh toán nhanh chóng</p>
-        </div>
-      </div>
-
+    <div className="w-full space-y-4 pt-0 animate-in fade-in duration-300">
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 xl:grid-cols-4">
         
         {/* KHU VỰC TRÁI (SẢN PHẨM) */}
@@ -180,40 +280,49 @@ export default function Sales() {
 
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-4">
             {filteredMedicines.length > 0 ? (
-              filteredMedicines.map((med) => (
-                <div
-                  key={med.id}
-                  onClick={() => setSelectedMedicine(med)}
-                  className="relative flex cursor-pointer flex-col justify-between overflow-hidden rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100 transition hover:shadow-md hover:ring-blue-400 select-none"
-                >
-                  <div>
-                    <span className="mb-2 inline-block rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">
-                      {med.category}
-                    </span>
-                    <h3 className="text-sm font-bold text-slate-800 line-clamp-2">{med.name}</h3>
-                  </div>
-                  
-                  {/* Khu vực giá và nút Thêm vào giỏ */}
-                  <div className="mt-4 flex items-end justify-between">
-                    <div>
-                      <p className="text-xs text-slate-500">Kho: {med.stock} {med.unit}</p>
-                      <p className="text-base font-bold text-blue-600">{formatMoney(med.price)}</p>
-                    </div>
+              filteredMedicines.map((med) => {
+                const availableStock = getAvailableStock(med.id, med.stock)
 
-                    {/* NÚT THÊM NHANH VÀO GIỎ HÀNG */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation(); // Ngăn chặn mở Modal khi bấm nút này
-                        handleAddToCart(med);
-                      }}
-                      className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600 transition hover:bg-blue-600 hover:text-white"
-                      title="Thêm vào giỏ"
-                    >
-                      <FaCartPlus size={16} />
-                    </button>
+                return (
+                  <div
+                    key={med.id}
+                    onClick={() => setSelectedMedicine(med)}
+                    className={`relative flex cursor-pointer flex-col justify-between overflow-hidden rounded-2xl bg-white p-4 shadow-sm ring-1 transition select-none ${
+                      availableStock > 0
+                        ? 'ring-slate-100 hover:shadow-md hover:ring-blue-400'
+                        : 'ring-red-100 opacity-75'
+                    }`}
+                  >
+                    <div>
+                      <span className="mb-2 inline-block rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">
+                        {med.category}
+                      </span>
+                      <h3 className="text-sm font-bold text-slate-800 line-clamp-2">{med.name}</h3>
+                    </div>
+                    
+                    {/* Khu vực giá và nút Thêm vào giỏ */}
+                    <div className="mt-4 flex items-end justify-between">
+                      <div>
+                        <p className="text-xs text-slate-500">Kho: {availableStock} {med.unit}</p>
+                        <p className="text-base font-bold text-blue-600">{formatMoney(med.price)}</p>
+                      </div>
+
+                      {/* NÚT THÊM NHANH VÀO GIỎ HÀNG */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation(); // Ngăn chặn mở Modal khi bấm nút này
+                          handleAddToCart(med);
+                        }}
+                        disabled={availableStock <= 0}
+                        className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600 transition hover:bg-blue-600 hover:text-white disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-300"
+                        title="Thêm vào giỏ"
+                      >
+                        <FaCartPlus size={16} />
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))
+                )
+              })
             ) : (
               <div className="col-span-full py-10 text-center text-slate-400">Không có thuốc phù hợp</div>
             )}
@@ -338,7 +447,9 @@ export default function Sales() {
                 </div>
                 <div className="text-right">
                   <p className="text-2xl font-bold text-slate-900">{formatMoney(selectedMedicine.price)}</p>
-                  <p className="text-sm font-medium text-emerald-600">Kho: {selectedMedicine.stock} {selectedMedicine.unit}</p>
+                  <p className="text-sm font-medium text-emerald-600">
+                    Kho: {getAvailableStock(selectedMedicine.id, selectedMedicine.stock)} {selectedMedicine.unit}
+                  </p>
                 </div>
               </div>
 

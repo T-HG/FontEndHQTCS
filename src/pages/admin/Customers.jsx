@@ -1,140 +1,79 @@
 import { useMemo, useState } from 'react'
+import { useInventoryAlerts } from '../../context/InventoryAlertContext'
+import { useSetPageHeader } from '../../context/PageHeaderContext'
 import {
-  FaPlus,
   FaFileExport,
   FaSearch,
-  FaTimes,
-  FaUser,
 } from 'react-icons/fa'
-
-// Dữ liệu mẫu cho Khách hàng
-const initialCustomers = [
-  {
-    id: 'KH000005',
-    name: 'Nguyễn Văn An',
-    phone: '0901234567',
-    gender: 'Nam',
-    totalSpent: 15600000,
-    address: 'Q. Cầu Giấy, Hà Nội',
-  },
-  {
-    id: 'KH000004',
-    name: 'Trần Thị Bích',
-    phone: '0987654321',
-    gender: 'Nữ',
-    totalSpent: 450000,
-    address: 'Q. Đống Đa, Hà Nội',
-  },
-  {
-    id: 'KH000003',
-    name: 'Lê Hoàng Hải',
-    phone: '0912223334',
-    gender: 'Nam',
-    totalSpent: 85000000,
-    address: 'TP. Vĩnh Yên, Vĩnh Phúc',
-  },
-  {
-    id: 'KH000002',
-    name: 'Phạm Mai Lan',
-    phone: '0933445566',
-    gender: 'Nữ',
-    totalSpent: 120000,
-    address: 'TX. Phúc Yên, Vĩnh Phúc',
-  },
-]
 
 function formatMoney(value) {
   return new Intl.NumberFormat('vi-VN').format(Number(value || 0)) + ' đ'
 }
 
-export default function Customers() {
-  const [customers, setCustomers] = useState(initialCustomers)
-  const [search, setSearch] = useState('')
-  const [showModal, setShowModal] = useState(false)
+function csvSafe(value) {
+  const text = String(value ?? '')
+  return `"${text.replace(/"/g, '""')}"`
+}
 
-  // State cho Form thêm khách hàng mới
-  const [formData, setFormData] = useState({
-    code: '',
-    name: '',
-    phone: '',
-    gender: 'Nam',
-    email: '',
-    address: '',
-    dob: '',
-  })
+export default function Customers() {
+  useSetPageHeader(
+    'Khách hàng',
+    'Danh sách khách hàng được tự động tạo từ các đơn hàng phát sinh',
+  )
+
+  const { customersFromOrders } = useInventoryAlerts()
+  const [search, setSearch] = useState('')
 
   // Lọc danh sách khách hàng
   const filteredCustomers = useMemo(() => {
-    return customers.filter((item) => {
+    return customersFromOrders.filter((item) => {
       const keyword = search.trim().toLowerCase()
       return (
         !keyword ||
         item.id.toLowerCase().includes(keyword) ||
         item.name.toLowerCase().includes(keyword) ||
-        item.phone.includes(keyword) ||
-        item.address.toLowerCase().includes(keyword) // Hỗ trợ tìm kiếm theo cả địa chỉ
+        item.phone.includes(keyword)
       )
     })
-  }, [customers, search])
+  }, [customersFromOrders, search])
 
-  const handleCloseModal = () => {
-    setShowModal(false)
-    setFormData({
-      code: '',
-      name: '',
-      phone: '',
-      gender: 'Nam',
-      email: '',
-      address: '',
-      dob: '',
-    })
-  }
-
-  const handleChangeForm = (field, value) => {
-    setFormData((prev) => ({
-      ...prev,
-      [field]: value,
-    }))
-  }
-
-  const handleSubmitCustomer = (e) => {
-    e.preventDefault()
-
-    if (!formData.name.trim()) {
-      alert('Vui lòng nhập tên khách hàng')
+  const handleExportCustomers = () => {
+    if (filteredCustomers.length === 0) {
+      alert('Không có dữ liệu để xuất file.')
       return
     }
 
-    if (!formData.phone.trim()) {
-      alert('Vui lòng nhập số điện thoại')
-      return
-    }
+    const headers = ['Mã KH', 'Tên khách hàng', 'Số điện thoại', 'Tổng bán']
+    const rows = filteredCustomers.map((item) => [
+      item.id,
+      item.name,
+      item.phone,
+      formatMoney(item.totalSpent),
+    ])
 
-    const newItem = {
-      id: formData.code || `KH${String(customers.length + 6).padStart(6, '0')}`,
-      name: formData.name,
-      phone: formData.phone,
-      gender: formData.gender,
-      totalSpent: 0,
-      address: formData.address,
-    }
+    const csvContent = [headers, ...rows]
+      .map((row) => row.map((cell) => csvSafe(cell)).join(','))
+      .join('\n')
 
-    setCustomers((prev) => [newItem, ...prev])
-    handleCloseModal()
+    const now = new Date()
+    const stamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(
+      now.getDate(),
+    ).padStart(2, '0')}`
+    const fileName = `danh-sach-khach-hang-${stamp}.csv`
+
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = fileName
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
   }
 
   return (
     <div className="w-full space-y-4 pt-0 animate-in fade-in duration-300">
-      {/* HEADER */}
-      <div className="flex items-end justify-between border-b border-slate-100 pb-4">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900">Khách hàng</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Quản lý thông tin liên hệ và lịch sử mua hàng của khách hàng
-          </p>
-        </div>
-      </div>
-
       <div className="grid grid-cols-1 gap-6">
         <div className="rounded-[28px] bg-white p-5 shadow-lg ring-1 ring-slate-100">
           {/* TOOLBAR */}
@@ -143,7 +82,7 @@ export default function Customers() {
               <FaSearch />
               <input
                 type="text"
-                placeholder="Tìm kiếm theo mã KH, tên, SĐT, địa chỉ..."
+                placeholder="Tìm kiếm theo mã KH, tên, SĐT..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="w-full bg-transparent text-sm text-slate-700 outline-none"
@@ -152,14 +91,10 @@ export default function Customers() {
 
             <div className="flex flex-wrap items-center gap-3">
               <button
-                onClick={() => setShowModal(true)}
-                className="flex items-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-medium text-white hover:bg-blue-700 transition"
+                onClick={handleExportCustomers}
+                className="flex cursor-pointer items-center gap-2 rounded-2xl bg-blue-50 px-4 py-3 text-sm font-medium text-blue-700 hover:bg-blue-100 transition disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={filteredCustomers.length === 0}
               >
-                <FaPlus />
-                Thêm mới
-              </button>
-
-              <button className="flex items-center gap-2 rounded-2xl bg-blue-50 px-4 py-3 text-sm font-medium text-blue-700 hover:bg-blue-100 transition">
                 <FaFileExport />
                 Xuất danh sách
               </button>
@@ -174,7 +109,6 @@ export default function Customers() {
                   <th className="whitespace-nowrap p-4">Mã KH</th>
                   <th className="whitespace-nowrap p-4">Tên khách hàng</th>
                   <th className="whitespace-nowrap p-4">Số điện thoại</th>
-                  <th className="whitespace-nowrap p-4">Địa chỉ</th> {/* THÊM CỘT ĐỊA CHỈ */}
                   <th className="whitespace-nowrap p-4 text-right">Tổng bán</th>
                 </tr>
               </thead>
@@ -185,7 +119,6 @@ export default function Customers() {
                       <td className="p-4 font-semibold text-slate-800">{item.id}</td>
                       <td className="p-4 font-medium text-blue-600">{item.name}</td>
                       <td className="p-4 text-slate-600">{item.phone}</td>
-                      <td className="p-4 text-slate-600">{item.address || '-'}</td> {/* HIỂN THỊ ĐỊA CHỈ */}
                       <td className="p-4 text-right font-semibold text-slate-800">
                         {formatMoney(item.totalSpent)}
                       </td>
@@ -193,7 +126,7 @@ export default function Customers() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="5" className="p-10 text-center text-slate-400">
+                    <td colSpan="4" className="p-10 text-center text-slate-400">
                       Không tìm thấy dữ liệu khách hàng
                     </td>
                   </tr>
@@ -206,7 +139,7 @@ export default function Customers() {
           <div className="mt-4 flex flex-col gap-3 text-sm text-slate-500 md:flex-row md:items-center md:justify-between">
             <p>
               Hiển thị <span className="font-semibold">{filteredCustomers.length}</span> / Tổng số{' '}
-              <span className="font-semibold">{customers.length}</span> khách hàng
+              <span className="font-semibold">{customersFromOrders.length}</span> khách hàng
             </p>
 
             <div className="flex items-center gap-2">
@@ -217,173 +150,6 @@ export default function Customers() {
         </div>
       </div>
 
-      {/* MODAL ADD CUSTOMER */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm">
-          <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-[28px] bg-white shadow-2xl animate-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5">
-              <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
-                  <FaUser size={20} />
-                </div>
-                <div>
-                  <h2 className="text-2xl font-bold text-slate-900">Thêm khách hàng</h2>
-                  <p className="mt-1 text-sm text-slate-500">
-                    Nhập thông tin cơ bản của khách hàng
-                  </p>
-                </div>
-              </div>
-
-              <button
-                onClick={handleCloseModal}
-                className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-500 hover:bg-slate-200 transition"
-              >
-                <FaTimes />
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmitCustomer} className="p-6">
-              <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
-                {/* LEFT */}
-                <div className="space-y-5">
-                  <FormRow label="Mã khách hàng">
-                    <input
-                      value={formData.code}
-                      onChange={(e) => handleChangeForm('code', e.target.value)}
-                      placeholder="Mã tự động"
-                      className="input-line"
-                    />
-                  </FormRow>
-
-                  <FormRow label="Tên khách hàng (*)">
-                    <input
-                      value={formData.name}
-                      onChange={(e) => handleChangeForm('name', e.target.value)}
-                      placeholder="Nhập tên khách hàng"
-                      className="input-line"
-                      required
-                    />
-                  </FormRow>
-
-                  <FormRow label="Số điện thoại (*)">
-                    <input
-                      type="tel"
-                      value={formData.phone}
-                      onChange={(e) => handleChangeForm('phone', e.target.value)}
-                      placeholder="Nhập số điện thoại"
-                      className="input-line"
-                      required
-                    />
-                  </FormRow>
-
-                  <FormRow label="Ngày sinh">
-                    <input
-                      type="date"
-                      value={formData.dob}
-                      onChange={(e) => handleChangeForm('dob', e.target.value)}
-                      className="input-line text-slate-600"
-                    />
-                  </FormRow>
-                </div>
-
-                {/* RIGHT */}
-                <div className="space-y-5">
-                  <FormRow label="Giới tính">
-                    <div className="flex items-center gap-6 pt-2">
-                      <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="gender"
-                          value="Nam"
-                          checked={formData.gender === 'Nam'}
-                          onChange={(e) => handleChangeForm('gender', e.target.value)}
-                          className="h-4 w-4 accent-blue-600 cursor-pointer"
-                        />
-                        Nam
-                      </label>
-                      <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="gender"
-                          value="Nữ"
-                          checked={formData.gender === 'Nữ'}
-                          onChange={(e) => handleChangeForm('gender', e.target.value)}
-                          className="h-4 w-4 accent-blue-600 cursor-pointer"
-                        />
-                        Nữ
-                      </label>
-                    </div>
-                  </FormRow>
-
-                  <FormRow label="Email">
-                    <input
-                      type="email"
-                      value={formData.email}
-                      onChange={(e) => handleChangeForm('email', e.target.value)}
-                      placeholder="example@gmail.com"
-                      className="input-line"
-                    />
-                  </FormRow>
-
-                  <FormRow label="Địa chỉ">
-                    <input
-                      value={formData.address}
-                      onChange={(e) => handleChangeForm('address', e.target.value)}
-                      placeholder="Nhập địa chỉ"
-                      className="input-line"
-                    />
-                  </FormRow>
-                </div>
-              </div>
-
-              <div className="mt-8 flex items-center justify-end gap-3 border-t border-slate-100 pt-6">
-                <button
-                  type="button"
-                  onClick={handleCloseModal}
-                  className="rounded-2xl bg-slate-100 px-6 py-3 font-medium text-slate-600 transition hover:bg-slate-200"
-                >
-                  Hủy bỏ
-                </button>
-
-                <button
-                  type="submit"
-                  className="rounded-2xl bg-blue-600 px-6 py-3 font-medium text-white transition hover:bg-blue-700 shadow-lg shadow-blue-600/30"
-                >
-                  Lưu thông tin
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* CSS STYLE */}
-      <style>{`
-        .input-line {
-          width: 100%;
-          border: none;
-          border-bottom: 2px solid #e2e8f0;
-          padding: 10px 0;
-          outline: none;
-          background: transparent;
-          color: #0f172a;
-          font-size: 15px;
-          transition: border-color 0.2s;
-        }
-
-        .input-line:focus {
-          border-bottom-color: #2563eb; 
-        }
-      `}</style>
-    </div>
-  )
-}
-
-function FormRow({ label, children }) {
-  return (
-    <div className="grid grid-cols-1 gap-2 md:grid-cols-[140px_minmax(0,1fr)] md:items-center">
-      <label className="text-sm font-medium text-slate-700">{label}</label>
-      <div>{children}</div>
     </div>
   )
 }

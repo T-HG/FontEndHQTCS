@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react'
+import { useInventoryAlerts } from '../../context/InventoryAlertContext'
+import { useSetPageHeader } from '../../context/PageHeaderContext'
 import {
   FaSearch,
   FaFileExport,
@@ -8,54 +10,6 @@ import {
   FaCheckCircle,
 } from 'react-icons/fa'
 
-// --- DỮ LIỆU MẪU ---
-const initialOrders = [
-  {
-    id: 'HD00105',
-    customerName: 'Nguyễn Văn An',
-    phone: '0901234567',
-    date: '06/04/2026 14:30',
-    total: 1944000,
-    status: 'Hoàn thành',
-    items: [
-      { id: 'SP02', name: 'Telfast BD', unit: 'Viên', qty: 12, price: 162000, total: 1944000 },
-    ],
-  },
-  {
-    id: 'HD00104',
-    customerName: 'Khách lẻ',
-    phone: '',
-    date: '06/04/2026 10:15',
-    total: 750000,
-    status: 'Hoàn thành',
-    items: [
-      { id: 'SP01', name: 'Panadol Extra', unit: 'Vỉ', qty: 50, price: 15000, total: 750000 },
-    ],
-  },
-  {
-    id: 'HD00103',
-    customerName: 'Trần Thị Bích',
-    phone: '0987654321',
-    date: '05/04/2026 16:45',
-    total: 500000,
-    status: 'Đang xử lý',
-    items: [
-      { id: 'SP04', name: 'Oresol', unit: 'Gói', qty: 100, price: 5000, total: 500000 },
-    ],
-  },
-  {
-    id: 'HD00102',
-    customerName: 'Lê Hoàng Hải',
-    phone: '0912223334',
-    date: '05/04/2026 09:20',
-    total: 197500,
-    status: 'Đã hủy',
-    items: [
-      { id: 'SP05', name: 'Ibuprofen 400mg', unit: 'Viên', qty: 25, price: 7900, total: 197500 },
-    ],
-  },
-]
-
 const statusOptions = ['Tất cả', 'Hoàn thành', 'Đang xử lý', 'Đã hủy']
 
 function formatMoney(value) {
@@ -63,7 +17,17 @@ function formatMoney(value) {
 }
 
 export default function Orders() {
-  const [orders, setOrders] = useState(initialOrders)
+  const currentUser = JSON.parse(localStorage.getItem('user') || 'null')
+  const isAdmin = currentUser?.role === 'admin'
+
+  useSetPageHeader(
+    'Đơn hàng',
+    isAdmin
+      ? 'Quản lý toàn bộ hóa đơn bán hàng trong hệ thống'
+      : 'Theo dõi các hóa đơn do tài khoản của bạn thực hiện',
+  )
+
+  const { orders, updateOrderStatus } = useInventoryAlerts()
   const [search, setSearch] = useState('')
   const [selectedStatus, setSelectedStatus] = useState('Tất cả')
   
@@ -71,8 +35,14 @@ export default function Orders() {
   const [selectedOrder, setSelectedOrder] = useState(null)
 
   // Lọc đơn hàng
+  const scopedOrders = useMemo(() => {
+    if (isAdmin) return orders
+    const staffName = currentUser?.name || ''
+    return orders.filter((item) => item.createdBy === staffName)
+  }, [currentUser?.name, isAdmin, orders])
+
   const filteredOrders = useMemo(() => {
-    return orders.filter((item) => {
+    return scopedOrders.filter((item) => {
       const keyword = search.trim().toLowerCase()
       const matchSearch =
         !keyword ||
@@ -85,7 +55,7 @@ export default function Orders() {
 
       return matchSearch && matchStatus
     })
-  }, [orders, search, selectedStatus])
+  }, [scopedOrders, search, selectedStatus])
 
   // Hàm hiển thị màu sắc theo trạng thái
   const getStatusBadge = (status) => {
@@ -103,16 +73,6 @@ export default function Orders() {
 
   return (
     <div className="w-full space-y-4 pt-0 animate-in fade-in duration-300">
-      {/* HEADER */}
-      <div className="flex items-end justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900">Đơn hàng</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Quản lý hóa đơn bán hàng, theo dõi trạng thái và chi tiết giao dịch
-          </p>
-        </div>
-      </div>
-
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[280px_minmax(0,1fr)]">
         {/* LEFT FILTER */}
         <div className="space-y-5">
@@ -186,9 +146,22 @@ export default function Orders() {
                         {formatMoney(item.total)}
                       </td>
                       <td className="p-4 text-center">
-                        <span className={`inline-block rounded-full px-3 py-1 text-xs font-semibold ${getStatusBadge(item.status)}`}>
-                          {item.status}
-                        </span>
+                        <select
+                          value={item.status}
+                          onChange={(e) => updateOrderStatus(item.id, e.target.value)}
+                          disabled={!isAdmin}
+                          className={`rounded-xl border px-3 py-2 text-xs font-semibold outline-none ${getStatusBadge(item.status)} border-transparent ${
+                            !isAdmin ? 'cursor-not-allowed opacity-80' : ''
+                          }`}
+                        >
+                          {statusOptions
+                            .filter((status) => status !== 'Tất cả')
+                            .map((status) => (
+                              <option key={status} value={status}>
+                                {status}
+                              </option>
+                            ))}
+                        </select>
                       </td>
                       <td className="p-4 text-center">
                         <button
@@ -216,7 +189,7 @@ export default function Orders() {
           <div className="mt-4 flex flex-col gap-3 text-sm text-slate-500 md:flex-row md:items-center md:justify-between">
             <p>
               Hiển thị <span className="font-semibold">{filteredOrders.length}</span> / Tổng số{' '}
-              <span className="font-semibold">{orders.length}</span> đơn hàng
+              <span className="font-semibold">{scopedOrders.length}</span> đơn hàng
             </p>
 
             <div className="flex items-center gap-2">
@@ -253,6 +226,8 @@ export default function Orders() {
                   <p className="text-xs text-slate-500">Khách hàng</p>
                   <p className="font-semibold text-slate-800">{selectedOrder.customerName}</p>
                   <p className="text-sm text-slate-600">{selectedOrder.phone || 'Không có SĐT'}</p>
+                  <p className="mt-2 text-xs text-slate-500">Nhân viên thực hiện</p>
+                  <p className="text-sm font-medium text-slate-700">{selectedOrder.createdBy || '-'}</p>
                 </div>
                 <div className="text-right">
                   <p className="text-xs text-slate-500 mb-1">Trạng thái</p>

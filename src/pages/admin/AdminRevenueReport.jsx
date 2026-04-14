@@ -39,20 +39,22 @@ function formatMoney(value) {
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value)
 }
 
-export default function Reports() {
+export default function AdminRevenueReport() {
   const [dateFilter, setDateFilter] = useState('week')
 
   return (
-    <div className="w-full space-y-4 pt-0 animate-in fade-in duration-300">
-      {/* HEADER */}
+    <section id="bao-cao-doanh-thu" className="scroll-mt-6 space-y-6">
       <div className="flex flex-col gap-4 border-b border-slate-100 pb-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900">Báo cáo doanh thu</h1>
+          <h2 className="text-2xl font-bold text-slate-900">Báo cáo doanh thu</h2>
           <p className="mt-1 text-sm text-slate-500">
             Xem báo cáo doanh thu chi tiết toàn hệ thống
           </p>
         </div>
-        <button className="flex items-center justify-center gap-2 rounded-2xl bg-slate-100 px-4 py-3 text-sm font-medium text-slate-600 transition hover:bg-slate-200">
+        <button
+          type="button"
+          className="flex items-center justify-center gap-2 rounded-2xl bg-slate-100 px-4 py-3 text-sm font-medium text-slate-600 transition hover:bg-slate-200"
+        >
           <FaFileExport />
           Xuất báo cáo
         </button>
@@ -161,6 +163,6 @@ export default function Reports() {
           </div>
         </div>
       </div>
-    </div>
+    </section>
   )
 }

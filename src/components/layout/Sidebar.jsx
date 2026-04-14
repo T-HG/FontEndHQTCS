@@ -5,7 +5,6 @@ import {
   FaWarehouse,
   FaUsers,
   FaFileInvoiceDollar,
-  FaChartLine,
   FaCashRegister,
   FaCrown,
   FaCog,
@@ -25,7 +24,6 @@ export default function Sidebar() {
     { to: '/inventory', label: 'Kho hàng', icon: <FaWarehouse /> },
     { to: '/customers', label: 'Khách hàng', icon: <FaUsers /> },
     { to: '/orders', label: 'Đơn hàng', icon: <FaFileInvoiceDollar /> },
-    { to: '/reports', label: 'Báo cáo', icon: <FaChartLine /> },
   ]
 
   const staffMenu = [
@@ -38,7 +36,7 @@ export default function Sidebar() {
   const menuItems = user.role === 'admin' ? adminMenu : staffMenu
 
   return (
-    <aside className="hidden w-[280px] shrink-0 rounded-l-[32px] bg-gradient-to-b from-emerald-600 via-green-600 to-teal-500 p-5 text-white lg:flex lg:flex-col">
+    <aside className="hidden w-[280px] shrink-0 bg-gradient-to-b from-emerald-600 via-green-600 to-teal-500 p-5 text-white lg:flex lg:min-h-0 lg:flex-col lg:overflow-hidden">
       <div className="mb-6 flex items-center gap-3">
         <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/20 text-xl shadow-lg backdrop-blur">
           <FaStaffSnake />
@@ -46,13 +44,10 @@ export default function Sidebar() {
 
         <div>
           <h1 className="text-xl font-bold">Pharmacy Manager</h1>
-          <p className="text-sm text-white/75">
-            {user.role === 'admin' ? 'Admin Dashboard' : 'Staff Dashboard'}
-          </p>
         </div>
       </div>
 
-      <nav className="flex-1 space-y-3">
+      <nav className="min-h-0 flex-1 space-y-3 overflow-y-auto">
         {menuItems.map((item) => (
           <NavLink
             key={item.to}

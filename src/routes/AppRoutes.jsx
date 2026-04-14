@@ -10,9 +10,9 @@ import Medicines from '../pages/admin/Medicines'
 import Employees from '../pages/admin/Employees'
 import Inventory from '../components/common/Inventory'
 import Customers from '../pages/admin/Customers'
-import Reports from '../pages/admin/Reports' 
 import Orders from '../pages/admin/Orders'
 import Sales from '../pages/staff/Sales'
+import Profile from '../pages/common/Profile'
 
 export default function AppRoutes() {
   return (
@@ -86,15 +86,6 @@ export default function AppRoutes() {
         />
 
         <Route
-          path="reports"
-          element={
-            <ProtectedRoute allowRoles={['admin']}>
-              <Reports />
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
           path="orders"
           element={
             <ProtectedRoute allowRoles={['admin', 'staff']}>
@@ -109,6 +100,15 @@ export default function AppRoutes() {
           element={
             <ProtectedRoute allowRoles={['admin', 'staff']}>
               <Sales />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="profile"
+          element={
+            <ProtectedRoute allowRoles={['admin', 'staff']}>
+              <Profile />
             </ProtectedRoute>
           }
         />

@@ -6,6 +6,8 @@ import {
   FaSearch,
   FaTimes,
 } from 'react-icons/fa'
+import { useInventoryAlerts } from '../../context/InventoryAlertContext'
+import { useSetPageHeader } from '../../context/PageHeaderContext'
 
 const initialMedicines = [
   {
@@ -121,7 +123,12 @@ function formatMoney(value) {
 }
 
 export default function Medicines() {
-  const [medicines, setMedicines] = useState(initialMedicines)
+  useSetPageHeader(
+    'Quản lý thuốc',
+    'Quản lý danh mục thuốc, tồn kho, giá bán và thông tin chi tiết',
+  )
+
+  const { medicines, addMedicine } = useInventoryAlerts()
   const [search, setSearch] = useState('')
   const [selectedTypes, setSelectedTypes] = useState([])
   const [selectedGroup, setSelectedGroup] = useState('Tất cả')
@@ -215,8 +222,10 @@ export default function Medicines() {
       type: formData.type,
       category: formData.group || 'Chưa phân nhóm',
       costPrice: Number(formData.costPrice || 0),
+      price: Number(formData.salePrice || 0),
       salePrice: Number(formData.salePrice || 0),
       stock: Number(formData.stock || 0),
+      minStock: 10,
       directSale: formData.directSale,
       group: formData.group,
       route: formData.route,
@@ -225,23 +234,22 @@ export default function Medicines() {
       ingredient: formData.ingredient,
       usage: formData.usage,
       dosage: formData.dosage,
+      supplierName: 'Chưa cập nhật',
+      lastImportPrice: Number(formData.costPrice || 0),
+      avgSold7d: 0,
+      avgSold30d: 0,
+      alertStatus: 'NONE',
+      alertNote: '',
+      alertBy: '',
+      alertAt: '',
     }
 
-    setMedicines((prev) => [newItem, ...prev])
+    addMedicine(newItem)
     handleCloseModal()
   }
 
   return (
     <div className="w-full space-y-4 pt-0 animate-in fade-in duration-300">
-      <div className="flex items-end justify-between border-b border-slate-100 pb-4">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900">Quản lý thuốc</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Quản lý danh mục thuốc, tồn kho, giá bán và thông tin chi tiết
-          </p>
-        </div>
-      </div>
-
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[280px_minmax(0,1fr)]">
         {/* LEFT FILTER */}
         <div className="space-y-5">
