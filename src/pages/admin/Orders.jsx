@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { jsPDF } from 'jspdf'
 import { useInventoryAlerts } from '../../context/InventoryAlertContext'
 import { useSetPageHeader } from '../../context/PageHeaderContext'
 import {
@@ -14,6 +15,11 @@ const statusOptions = ['Tất cả', 'Hoàn thành', 'Đang xử lý', 'Đã h�
 
 function formatMoney(value) {
   return new Intl.NumberFormat('vi-VN').format(Number(value || 0)) + ' đ'
+}
+
+function csvSafe(value) {
+  const text = String(value ?? '')
+  return `"${text.replace(/"/g, '""')}"`
 }
 
 export default function Orders() {
@@ -71,6 +77,113 @@ export default function Orders() {
     }
   }
 
+  const handleExportOrders = () => {
+    if (!isAdmin) return
+    if (filteredOrders.length === 0) {
+      alert('Không có dữ liệu để xuất file.')
+      return
+    }
+
+    const headers = [
+      'Mã HĐ',
+      'Khách hàng',
+      'SĐT',
+      'Thời gian',
+      'Tổng tiền',
+      'Trạng thái',
+      'Nhân viên thực hiện',
+    ]
+
+    const rows = filteredOrders.map((item) => [
+      item.id,
+      item.customerName,
+      item.phone || '',
+      item.date,
+      Number(item.total || 0),
+      item.status,
+      item.createdBy || '',
+    ])
+
+    const csvContent = [headers, ...rows]
+      .map((row) => row.map((cell) => csvSafe(cell)).join(','))
+      .join('\n')
+
+    const now = new Date()
+    const stamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(
+      now.getDate(),
+    ).padStart(2, '0')}`
+    const fileName = `danh-sach-don-hang-${stamp}.csv`
+
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = fileName
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+  }
+
+  const handleExportInvoicePdf = () => {
+    if (!selectedOrder) return
+
+    const doc = new jsPDF()
+    const marginX = 14
+    let y = 16
+
+    doc.setFontSize(16)
+    doc.text(`HOA DON BAN HANG - ${selectedOrder.id}`, marginX, y)
+    y += 10
+
+    doc.setFontSize(11)
+    doc.text(`Ngay tao: ${selectedOrder.date || ''}`, marginX, y)
+    y += 6
+    doc.text(`Khach hang: ${selectedOrder.customerName || 'Khach le'}`, marginX, y)
+    y += 6
+    doc.text(`So dien thoai: ${selectedOrder.phone || '-'}`, marginX, y)
+    y += 6
+    doc.text(`Nhan vien: ${selectedOrder.createdBy || '-'}`, marginX, y)
+    y += 6
+    doc.text(`Trang thai: ${selectedOrder.status || '-'}`, marginX, y)
+    y += 10
+
+    doc.setFontSize(10)
+    doc.text('STT', 14, y)
+    doc.text('San pham', 25, y)
+    doc.text('SL', 138, y)
+    doc.text('Don gia', 152, y, { align: 'right' })
+    doc.text('Thanh tien', 196, y, { align: 'right' })
+    y += 3
+    doc.line(14, y, 196, y)
+    y += 6
+
+    selectedOrder.items.forEach((item, index) => {
+      if (y > 275) {
+        doc.addPage()
+        y = 16
+      }
+      const lineTotal = Number(item.total || 0).toLocaleString('vi-VN')
+      const linePrice = Number(item.price || 0).toLocaleString('vi-VN')
+      doc.text(String(index + 1), 14, y)
+      doc.text(String(item.name || ''), 25, y, { maxWidth: 108 })
+      doc.text(String(item.qty || 0), 138, y)
+      doc.text(`${linePrice} d`, 152, y, { align: 'right' })
+      doc.text(`${lineTotal} d`, 196, y, { align: 'right' })
+      y += 7
+    })
+
+    y += 4
+    doc.line(14, y, 196, y)
+    y += 8
+    doc.setFontSize(12)
+    doc.text(`Tong thanh toan: ${Number(selectedOrder.total || 0).toLocaleString('vi-VN')} d`, 196, y, {
+      align: 'right',
+    })
+
+    doc.save(`hoa-don-${selectedOrder.id}.pdf`)
+  }
+
   return (
     <div className="w-full space-y-4 pt-0 animate-in fade-in duration-300">
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[280px_minmax(0,1fr)]">
@@ -111,12 +224,18 @@ export default function Orders() {
               />
             </div>
 
-            <div className="flex flex-wrap items-center gap-3">
-              <button className="flex items-center gap-2 rounded-2xl bg-blue-50 px-4 py-3 text-sm font-medium text-blue-700 hover:bg-blue-100">
-                <FaFileExport />
-                Xuất danh sách
-              </button>
-            </div>
+            {isAdmin && (
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  onClick={handleExportOrders}
+                  disabled={filteredOrders.length === 0}
+                  className="flex cursor-pointer items-center gap-2 rounded-2xl bg-blue-50 px-4 py-3 text-sm font-medium text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <FaFileExport />
+                  Xuất danh sách
+                </button>
+              </div>
+            )}
           </div>
 
           {/* TABLE */}
@@ -280,10 +399,16 @@ export default function Orders() {
             </div>
 
             <div className="flex items-center justify-end gap-3 border-t border-slate-100 px-6 py-4">
-              <button className="flex items-center gap-2 rounded-xl bg-slate-100 px-4 py-2.5 font-medium text-slate-600 hover:bg-slate-200">
-                <FaPrint />
-                In hóa đơn
-              </button>
+              {!isAdmin && (
+                <button
+                  type="button"
+                  onClick={handleExportInvoicePdf}
+                  className="flex items-center gap-2 rounded-xl bg-slate-100 px-4 py-2.5 font-medium text-slate-600 hover:bg-slate-200"
+                >
+                  <FaPrint />
+                  In hóa đơn
+                </button>
+              )}
               <button
                 onClick={() => setSelectedOrder(null)}
                 className="flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-2.5 font-medium text-white hover:bg-blue-700"
