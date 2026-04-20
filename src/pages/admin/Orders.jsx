@@ -11,7 +11,12 @@ import {
   FaCheckCircle,
 } from 'react-icons/fa'
 
-const statusOptions = ['Tất cả', 'Hoàn thành', 'Đang xử lý', 'Đã hủy']
+const statusOptions = ['Tất cả', 'Hoàn thành', 'Đã hủy']
+
+function normalizeOrderStatus(status) {
+  if (status === 'Đã hủy') return 'Đã hủy'
+  return 'Hoàn thành'
+}
 
 function formatMoney(value) {
   return new Intl.NumberFormat('vi-VN').format(Number(value || 0)) + ' đ'
@@ -56,8 +61,8 @@ export default function Orders() {
         item.customerName.toLowerCase().includes(keyword) ||
         item.phone.includes(keyword)
 
-      const matchStatus =
-        selectedStatus === 'Tất cả' || item.status === selectedStatus
+      const itemStatus = normalizeOrderStatus(item.status)
+      const matchStatus = selectedStatus === 'Tất cả' || itemStatus === selectedStatus
 
       return matchSearch && matchStatus
     })
@@ -68,8 +73,6 @@ export default function Orders() {
     switch (status) {
       case 'Hoàn thành':
         return 'bg-emerald-50 text-emerald-600'
-      case 'Đang xử lý':
-        return 'bg-orange-50 text-orange-600'
       case 'Đã hủy':
         return 'bg-red-50 text-red-600'
       default:
@@ -266,10 +269,10 @@ export default function Orders() {
                       </td>
                       <td className="p-4 text-center">
                         <select
-                          value={item.status}
+                          value={normalizeOrderStatus(item.status)}
                           onChange={(e) => updateOrderStatus(item.id, e.target.value)}
                           disabled={!isAdmin}
-                          className={`rounded-xl border px-3 py-2 text-xs font-semibold outline-none ${getStatusBadge(item.status)} border-transparent ${
+                          className={`rounded-xl border px-3 py-2 text-xs font-semibold outline-none ${getStatusBadge(normalizeOrderStatus(item.status))} border-transparent ${
                             !isAdmin ? 'cursor-not-allowed opacity-80' : ''
                           }`}
                         >
@@ -350,8 +353,8 @@ export default function Orders() {
                 </div>
                 <div className="text-right">
                   <p className="text-xs text-slate-500 mb-1">Trạng thái</p>
-                  <span className={`inline-block rounded-full px-3 py-1 text-xs font-semibold ${getStatusBadge(selectedOrder.status)}`}>
-                    {selectedOrder.status}
+                  <span className={`inline-block rounded-full px-3 py-1 text-xs font-semibold ${getStatusBadge(normalizeOrderStatus(selectedOrder.status))}`}>
+                    {normalizeOrderStatus(selectedOrder.status)}
                   </span>
                 </div>
               </div>

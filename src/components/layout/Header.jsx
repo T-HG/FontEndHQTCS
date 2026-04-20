@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { FaBell } from 'react-icons/fa'
 import { getDisplayStatus, useInventoryAlerts } from '../../context/InventoryAlertContext'
 import { useNavigate } from 'react-router-dom'
@@ -8,6 +8,7 @@ export default function Header() {
   const navigate = useNavigate()
   const [user, setUser] = useState(() => JSON.parse(localStorage.getItem('user') || 'null'))
   const [openLowStockPopup, setOpenLowStockPopup] = useState(false)
+  const notificationRef = useRef(null)
   const { lowStockAlerts, pendingAlerts } = useInventoryAlerts()
   const { pageHeader } = usePageHeader()
   const isAdmin = user?.role === 'admin'
@@ -24,6 +25,22 @@ export default function Header() {
       window.removeEventListener('storage', syncUser)
     }
   }, [])
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (!notificationRef.current?.contains(event.target)) {
+        setOpenLowStockPopup(false)
+      }
+    }
+
+    if (openLowStockPopup) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [openLowStockPopup])
 
   const handleLogout = () => {
     localStorage.removeItem('user')
@@ -43,7 +60,7 @@ export default function Header() {
   if (!user) return null
 
   return (
-    <header className="border-b border-slate-200/70 bg-white/50 px-4 py-4 backdrop-blur md:px-6 xl:px-8">
+    <header className="relative z-40 overflow-visible border-b border-slate-200/70 bg-white/50 px-4 py-4 backdrop-blur md:px-6 xl:px-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0 flex-1">
           {pageHeader.title ? (
@@ -58,21 +75,70 @@ export default function Header() {
           ) : null}
         </div>
 
-        <div className="relative flex shrink-0 flex-wrap items-center gap-3 sm:justify-end">
+        <div className="flex shrink-0 flex-wrap items-center gap-3 sm:justify-end">
           {isAdmin && (
-            <button
-              type="button"
-              onClick={() => setOpenLowStockPopup((prev) => !prev)}
-              className="relative inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white text-slate-600 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-50"
-              title="Cảnh báo tồn kho thấp"
-            >
-              <FaBell />
-              {lowStockCount > 0 && (
-                <span className="absolute -right-1 -top-1 inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
-                  {lowStockCount}
-                </span>
+            <div ref={notificationRef} className="relative z-50">
+              <button
+                type="button"
+                onClick={() => setOpenLowStockPopup((prev) => !prev)}
+                className="relative inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white text-slate-600 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-50"
+                title="Cảnh báo tồn kho thấp"
+              >
+                <FaBell />
+                {lowStockCount > 0 && (
+                  <span className="absolute -right-1 -top-1 inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                    {lowStockCount}
+                  </span>
+                )}
+              </button>
+
+              {isAdmin && openLowStockPopup && (
+                <div className="absolute right-0 top-12 z-[100] w-80 max-w-[calc(100vw-2rem)] rounded-2xl border border-slate-200 bg-white p-4 shadow-xl">
+                  <div className="mb-3 flex items-center justify-between">
+                    <h3 className="text-sm font-bold text-slate-900">Cảnh báo tồn kho thấp</h3>
+                    <span className="rounded-full bg-red-50 px-2 py-1 text-[10px] font-bold text-red-600">
+                      {lowStockCount} cảnh báo
+                    </span>
+                  </div>
+
+                  {(isAdmin ? pendingPreview : lowStockPreview).length === 0 ? (
+                    <p className="rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                      Không có mặt hàng nào dưới mức tồn kho tối thiểu.
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {(isAdmin ? pendingPreview : lowStockPreview).map((item) => {
+                        const isPendingItem = Boolean(item.medicineId)
+                        const medicine = isPendingItem
+                          ? lowStockAlerts.find((m) => m.id === item.medicineId)
+                          : item
+                        if (!medicine) return null
+                        const status = getDisplayStatus(medicine)
+                        return (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => handleAlertClick(isPendingItem ? item.id : null)}
+                            className="w-full rounded-xl bg-slate-50 px-3 py-2 text-left transition hover:bg-slate-100"
+                          >
+                            <p className="text-xs font-semibold text-slate-800">
+                              {medicine.name} ({medicine.id})
+                            </p>
+                            <p className="mt-1 text-[11px] text-slate-600">
+                              Tồn: <span className="font-bold text-red-600">{medicine.stock}</span> /
+                              Min: {medicine.minStock}
+                            </p>
+                            <p className="mt-1 text-[11px] font-semibold text-slate-500">
+                              Trạng thái: {status.label}
+                            </p>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
               )}
-            </button>
+            </div>
           )}
 
           <button
@@ -100,52 +166,6 @@ export default function Header() {
             Đăng xuất
           </button>
 
-          {isAdmin && openLowStockPopup && (
-            <div className="absolute right-0 top-12 z-30 w-80 rounded-2xl border border-slate-200 bg-white p-4 shadow-xl">
-              <div className="mb-3 flex items-center justify-between">
-                <h3 className="text-sm font-bold text-slate-900">Cảnh báo tồn kho thấp</h3>
-                <span className="rounded-full bg-red-50 px-2 py-1 text-[10px] font-bold text-red-600">
-                  {lowStockCount} cảnh báo
-                </span>
-              </div>
-
-              {(isAdmin ? pendingPreview : lowStockPreview).length === 0 ? (
-                <p className="rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-500">
-                  Không có mặt hàng nào dưới mức tồn kho tối thiểu.
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  {(isAdmin ? pendingPreview : lowStockPreview).map((item) => {
-                    const isPendingItem = Boolean(item.medicineId)
-                    const medicine = isPendingItem
-                      ? lowStockAlerts.find((m) => m.id === item.medicineId)
-                      : item
-                    if (!medicine) return null
-                    const status = getDisplayStatus(medicine)
-                    return (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => handleAlertClick(isPendingItem ? item.id : null)}
-                        className="w-full rounded-xl bg-slate-50 px-3 py-2 text-left transition hover:bg-slate-100"
-                      >
-                        <p className="text-xs font-semibold text-slate-800">
-                          {medicine.name} ({medicine.id})
-                        </p>
-                        <p className="mt-1 text-[11px] text-slate-600">
-                          Tồn: <span className="font-bold text-red-600">{medicine.stock}</span> / Min:{' '}
-                          {medicine.minStock}
-                        </p>
-                        <p className="mt-1 text-[11px] font-semibold text-slate-500">
-                          Trạng thái: {status.label}
-                        </p>
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-          )}
         </div>
       </div>
     </header>

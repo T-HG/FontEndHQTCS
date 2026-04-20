@@ -2,6 +2,8 @@ import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 
 const STORAGE_KEY = 'inventory_alert_store_v2'
 const DEMO_SEED_TIME = '2026-04-14T08:00:00.000Z'
+const ROOT_EMPLOYEE_ID = 'NV001'
+const ROOT_ACCOUNT_ID = 1
 
 const initialMedicines = [
   {
@@ -180,14 +182,17 @@ const initialOrders = [
 const initialEmployees = [
   {
     id: 'NV001',
+    accountId: ROOT_ACCOUNT_ID,
     fullName: 'Nguyễn Văn An',
     phone: '0901111222',
     username: 'admin01',
     role: 'Admin',
     isActive: true,
+    isRoot: true,
   },
   {
     id: 'NV002',
+    accountId: 2,
     fullName: 'Trần Thị Bình',
     phone: '0988333444',
     username: 'staff01',
@@ -196,6 +201,7 @@ const initialEmployees = [
   },
   {
     id: 'NV003',
+    accountId: 3,
     fullName: 'Lê Minh Châu',
     phone: '0912555666',
     username: 'staff02',
@@ -242,6 +248,35 @@ const initialNotifications = [
 
 const InventoryAlertContext = createContext(null)
 
+function isRootEmployee(employee) {
+  return (
+    employee?.isRoot === true ||
+    Number(employee?.accountId) === ROOT_ACCOUNT_ID ||
+    String(employee?.id || '').toUpperCase() === ROOT_EMPLOYEE_ID
+  )
+}
+
+function normalizeEmployees(items) {
+  if (!Array.isArray(items)) return initialEmployees
+  return items.map((item, index) => {
+    const root = isRootEmployee(item)
+    return {
+      ...item,
+      accountId: Number(item?.accountId) || (root ? ROOT_ACCOUNT_ID : index + 1),
+      isRoot: root,
+    }
+  })
+}
+
+function isRootActor(actor) {
+  return (
+    actor?.isRoot === true ||
+    Number(actor?.accountId) === ROOT_ACCOUNT_ID ||
+    String(actor?.employeeId || '').toUpperCase() === ROOT_EMPLOYEE_ID ||
+    actor?.email === 'admin@gmail.com'
+  )
+}
+
 function loadInitialState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
@@ -258,7 +293,9 @@ function loadInitialState() {
     return {
       medicines: Array.isArray(parsed?.medicines) ? parsed.medicines : initialMedicines,
       orders: Array.isArray(parsed?.orders) ? parsed.orders : initialOrders,
-      employees: Array.isArray(parsed?.employees) ? parsed.employees : initialEmployees,
+      employees: Array.isArray(parsed?.employees)
+        ? normalizeEmployees(parsed.employees)
+        : initialEmployees,
       alerts: Array.isArray(parsed?.alerts) ? parsed.alerts : initialAlerts,
       notifications: Array.isArray(parsed?.notifications)
         ? parsed.notifications
@@ -281,7 +318,9 @@ function parseStorePayload(raw) {
     return {
       medicines: Array.isArray(parsed?.medicines) ? parsed.medicines : initialMedicines,
       orders: Array.isArray(parsed?.orders) ? parsed.orders : initialOrders,
-      employees: Array.isArray(parsed?.employees) ? parsed.employees : initialEmployees,
+      employees: Array.isArray(parsed?.employees)
+        ? normalizeEmployees(parsed.employees)
+        : initialEmployees,
       alerts: Array.isArray(parsed?.alerts) ? parsed.alerts : initialAlerts,
       notifications: Array.isArray(parsed?.notifications)
         ? parsed.notifications
@@ -331,7 +370,7 @@ export function InventoryAlertProvider({ children }) {
       if (!nextState) return
       setMedicines(nextState.medicines)
       setOrders(nextState.orders)
-      setEmployees(nextState.employees)
+      setEmployees(normalizeEmployees(nextState.employees))
       setAlerts(nextState.alerts)
       setNotifications(nextState.notifications)
       setUpdatedAt(new Date().toISOString())
@@ -621,18 +660,30 @@ export function InventoryAlertProvider({ children }) {
     setUpdatedAt(new Date().toISOString())
   }
 
-  const updateEmployeeRole = (employeeId, nextRole) => {
+  const updateEmployeeRole = (employeeId, nextRole, actor = null) => {
     if (!employeeId || !nextRole) return
+    const actorIsRoot = isRootActor(actor)
     setEmployees((prev) =>
-      prev.map((item) => (item.id === employeeId ? { ...item, role: nextRole } : item)),
+      prev.map((item) => {
+        if (item.id !== employeeId) return item
+        if (isRootEmployee(item)) return item
+        if (item.role === 'Admin' && !actorIsRoot) return item
+        return { ...item, role: nextRole }
+      }),
     )
     setUpdatedAt(new Date().toISOString())
   }
 
-  const toggleEmployeeStatus = (employeeId, isActive) => {
+  const toggleEmployeeStatus = (employeeId, isActive, actor = null) => {
     if (!employeeId) return
+    const actorIsRoot = isRootActor(actor)
     setEmployees((prev) =>
-      prev.map((item) => (item.id === employeeId ? { ...item, isActive: Boolean(isActive) } : item)),
+      prev.map((item) => {
+        if (item.id !== employeeId) return item
+        if (isRootEmployee(item)) return item
+        if (item.role === 'Admin' && !actorIsRoot) return item
+        return { ...item, isActive: Boolean(isActive) }
+      }),
     )
     setUpdatedAt(new Date().toISOString())
   }

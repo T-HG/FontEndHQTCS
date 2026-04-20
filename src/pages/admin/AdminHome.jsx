@@ -20,10 +20,10 @@ export default function AdminHome() {
   const {
     lowStockAlerts,
     pendingAlerts,
-    orders,
     customersFromOrders,
     orderStatusSummary,
   } = useInventoryAlerts()
+  const closedOrdersCount = orderStatusSummary.completed + orderStatusSummary.cancelled
 
   const stats = useMemo(
     () => [
@@ -36,9 +36,9 @@ export default function AdminHome() {
       },
       {
         title: 'Đơn hàng',
-        value: orders.length.toLocaleString('vi-VN'),
-        change: `${orderStatusSummary.processing} đang xử lý`,
-        up: orderStatusSummary.processing === 0,
+        value: closedOrdersCount.toLocaleString('vi-VN'),
+        change: `${orderStatusSummary.cancelled} đã hủy`,
+        up: orderStatusSummary.cancelled === 0,
         icon: <FaCapsules size={20} />,
       },
       {
@@ -63,11 +63,10 @@ export default function AdminHome() {
     ],
     [
       customersFromOrders.length,
+      closedOrdersCount,
       lowStockAlerts.length,
       orderStatusSummary.cancelled,
       orderStatusSummary.completed,
-      orderStatusSummary.processing,
-      orders.length,
       pendingAlerts.length,
     ],
   )

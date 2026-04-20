@@ -4,6 +4,7 @@ import { useInventoryAlerts } from '../../context/InventoryAlertContext'
 import { FaSearch, FaExclamationTriangle } from 'react-icons/fa'
 
 const roleOptions = ['Admin', 'Nhân viên bán hàng']
+const ROOT_EMPLOYEE_ID = 'NV001'
 
 export default function Employees() {
   useSetPageHeader(
@@ -13,6 +14,12 @@ export default function Employees() {
 
   const currentUser = JSON.parse(localStorage.getItem('user') || 'null')
   const isAdmin = currentUser?.role === 'admin'
+  const isRootAdmin =
+    isAdmin &&
+    (currentUser?.isRoot === true ||
+      Number(currentUser?.accountId) === 1 ||
+      String(currentUser?.employeeId || '').toUpperCase() === ROOT_EMPLOYEE_ID ||
+      currentUser?.email === 'admin@gmail.com')
   const { employees, updateEmployeeRole, toggleEmployeeStatus } = useInventoryAlerts()
   const [search, setSearch] = useState('')
   const [filterRole, setFilterRole] = useState('Tất cả')
@@ -58,12 +65,48 @@ export default function Employees() {
       showAlert('Từ chối truy cập', 'Chỉ Quản trị viên (Admin) mới có quyền đổi vai trò.')
       return
     }
-    updateEmployeeRole(employee.id, nextRole)
+    const isRootAccount =
+      employee?.isRoot === true ||
+      Number(employee?.accountId) === 1 ||
+      String(employee?.id || '').toUpperCase() === ROOT_EMPLOYEE_ID
+    if (isRootAccount) {
+      showAlert(
+        'Tài khoản được bảo vệ',
+        'Tài khoản Chủ nhà thuốc (Root - ID = 1) không được phép chỉnh sửa vai trò.',
+      )
+      return
+    }
+    if (employee.role === 'Admin' && !isRootAdmin) {
+      showAlert(
+        'Không đủ quyền',
+        'Chỉ tài khoản Chủ nhà thuốc (Root) mới có quyền chỉnh sửa vai trò của các Admin khác.',
+      )
+      return
+    }
+    updateEmployeeRole(employee.id, nextRole, currentUser)
   }
 
   const handleToggleStatus = (employee) => {
     if (!isAdmin) {
       showAlert('Từ chối truy cập', 'Chỉ Quản trị viên (Admin) mới có quyền vô hiệu hóa tài khoản.')
+      return
+    }
+    const isRootAccount =
+      employee?.isRoot === true ||
+      Number(employee?.accountId) === 1 ||
+      String(employee?.id || '').toUpperCase() === ROOT_EMPLOYEE_ID
+    if (isRootAccount) {
+      showAlert(
+        'Tài khoản được bảo vệ',
+        'Không thể khóa hoặc vô hiệu hóa tài khoản Chủ nhà thuốc (Root - ID = 1).',
+      )
+      return
+    }
+    if (employee.role === 'Admin' && !isRootAdmin) {
+      showAlert(
+        'Không đủ quyền',
+        'Chỉ tài khoản Chủ nhà thuốc (Root) mới có quyền khóa/mở khóa tài khoản Admin.',
+      )
       return
     }
 
@@ -74,7 +117,7 @@ export default function Employees() {
         ? `Bạn có chắc muốn kích hoạt lại tài khoản [${employee.fullName}]?`
         : `Bạn có chắc muốn vô hiệu hóa tài khoản [${employee.fullName}]?`,
       () => {
-        toggleEmployeeStatus(employee.id, willActive)
+        toggleEmployeeStatus(employee.id, willActive, currentUser)
         closeDialog()
       },
     )
@@ -142,12 +185,20 @@ export default function Employees() {
                     <td className="p-4 text-slate-600">{item.phone || '-'}</td>
                     <td className="p-4 text-slate-600">{item.username}</td>
                     <td className="p-4">
+                      {(() => {
+                        const isRootAccount =
+                          item?.isRoot === true ||
+                          Number(item?.accountId) === 1 ||
+                          String(item?.id || '').toUpperCase() === ROOT_EMPLOYEE_ID
+                        const canEditRole =
+                          isAdmin && !isRootAccount && (isRootAdmin || item.role !== 'Admin')
+                        return (
                       <select
                         value={item.role}
                         onChange={(e) => handleRoleChange(item, e.target.value)}
-                        disabled={!isAdmin}
+                        disabled={!canEditRole}
                         className={`rounded-xl border px-3 py-2 text-xs font-semibold outline-none ${
-                          isAdmin
+                          canEditRole
                             ? 'border-slate-200 bg-white text-slate-700 focus:border-emerald-400'
                             : 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400'
                         }`}
@@ -158,6 +209,8 @@ export default function Employees() {
                           </option>
                         ))}
                       </select>
+                        )
+                      })()}
                     </td>
                     <td className="p-4">
                       <span
@@ -174,11 +227,18 @@ export default function Employees() {
                       <div className="flex flex-wrap items-center justify-end gap-2">
                         <button
                           onClick={() => handleToggleStatus(item)}
+                          disabled={
+                            !isAdmin ||
+                            item?.isRoot === true ||
+                            Number(item?.accountId) === 1 ||
+                            String(item?.id || '').toUpperCase() === ROOT_EMPLOYEE_ID ||
+                            (item.role === 'Admin' && !isRootAdmin)
+                          }
                           className={`rounded-xl px-3 py-2 text-xs font-semibold transition ${
                             item.isActive
                               ? 'bg-red-50 text-red-600 hover:bg-red-600 hover:text-white'
                               : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white'
-                          }`}
+                          } disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-inherit disabled:hover:text-inherit`}
                           title={item.isActive ? 'Vô hiệu hóa tài khoản' : 'Kích hoạt lại tài khoản'}
                         >
                           {item.isActive ? 'Vô hiệu hóa' : 'Kích hoạt'}

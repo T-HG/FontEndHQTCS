@@ -51,13 +51,6 @@ export default function AdminRevenueReport() {
             Xem báo cáo doanh thu chi tiết toàn hệ thống
           </p>
         </div>
-        <button
-          type="button"
-          className="flex items-center justify-center gap-2 rounded-2xl bg-slate-100 px-4 py-3 text-sm font-medium text-slate-600 transition hover:bg-slate-200"
-        >
-          <FaFileExport />
-          Xuất báo cáo
-        </button>
       </div>
 
       {/* CONTENT: BÁO CÁO DOANH THU */}

@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
-import { FaExclamationTriangle, FaPaperPlane, FaSearch, FaTools } from 'react-icons/fa'
+import {
+  FaExclamationTriangle,
+  FaPaperPlane,
+  FaSearch,
+  FaSort,
+  FaSortDown,
+  FaSortUp,
+  FaTools,
+} from 'react-icons/fa'
 import { useSearchParams } from 'react-router-dom'
 import {
   getDisplayStatus,
@@ -30,6 +38,7 @@ export default function Inventory() {
   } = useInventoryAlerts()
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState('Tất cả')
+  const [stockSortOrder, setStockSortOrder] = useState(null) // null | asc | desc
   const [staffAlertModal, setStaffAlertModal] = useState({
     isOpen: false,
     medicineId: null,
@@ -45,7 +54,7 @@ export default function Inventory() {
   })
 
   const filteredData = useMemo(() => {
-    return medicines.filter((item) => {
+    const matched = medicines.filter((item) => {
       const keyword = search.toLowerCase()
 
       const matchSearch =
@@ -64,7 +73,18 @@ export default function Inventory() {
 
       return matchSearch && matchStatus
     })
-  }, [medicines, search, filterStatus])
+    if (!stockSortOrder) return matched
+    const sorted = [...matched].sort((a, b) => Number(a.stock || 0) - Number(b.stock || 0))
+    return stockSortOrder === 'asc' ? sorted : sorted.reverse()
+  }, [medicines, search, filterStatus, stockSortOrder])
+
+  const handleToggleStockSort = () => {
+    setStockSortOrder((prev) => {
+      if (prev === null) return 'asc'
+      if (prev === 'asc') return 'desc'
+      return null
+    })
+  }
 
   const selectedAlertMedicine = useMemo(
     () => medicines.find((item) => item.id === staffAlertModal.medicineId) || null,
@@ -256,7 +276,23 @@ export default function Inventory() {
                 <th className="p-4 whitespace-nowrap">Tên thuốc</th>
                 <th className="p-4 whitespace-nowrap">Đơn vị</th>
                 <th className="p-4 whitespace-nowrap text-right">Tối thiểu</th>
-                <th className="p-4 whitespace-nowrap text-right">Tồn kho</th>
+                <th className="p-4 whitespace-nowrap text-right">
+                  <button
+                    type="button"
+                    onClick={handleToggleStockSort}
+                    className="ml-auto inline-flex items-center gap-1 rounded-md px-1 py-0.5 font-semibold text-blue-600 transition hover:bg-blue-50"
+                    title="Bấm để sắp xếp theo số lượng tồn kho"
+                  >
+                    Tồn kho
+                    {stockSortOrder === 'asc' ? (
+                      <FaSortUp className="translate-y-[2px]" />
+                    ) : stockSortOrder === 'desc' ? (
+                      <FaSortDown className="-translate-y-[1px]" />
+                    ) : (
+                      <FaSort className="text-blue-400" />
+                    )}
+                  </button>
+                </th>
                 <th className="p-4 whitespace-nowrap text-center">Trạng thái</th>
                 <th className="p-4 whitespace-nowrap text-center">Thao tác</th>
               </tr>

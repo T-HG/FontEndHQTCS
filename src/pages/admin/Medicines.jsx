@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { jsPDF } from 'jspdf'
 import {
   FaPlus,
   FaFileImport,
@@ -118,6 +119,8 @@ const groupOptions = [
   'Thuốc trị tiểu đường',
 ]
 
+const ALL_GROUP_OPTION = 'Tất cả'
+
 function formatMoney(value) {
   return new Intl.NumberFormat('vi-VN').format(Number(value || 0))
 }
@@ -131,7 +134,7 @@ export default function Medicines() {
   const { medicines, addMedicine } = useInventoryAlerts()
   const [search, setSearch] = useState('')
   const [selectedTypes, setSelectedTypes] = useState([])
-  const [selectedGroup, setSelectedGroup] = useState('Tất cả')
+  const [selectedGroup, setSelectedGroup] = useState(ALL_GROUP_OPTION)
   const [showModal, setShowModal] = useState(false)
   
   // State quản lý Tab đang mở (info / details)
@@ -170,11 +173,20 @@ export default function Medicines() {
         selectedTypes.length === 0 || selectedTypes.includes(item.type)
 
       const matchGroup =
-        selectedGroup === 'Tất cả' || item.category === selectedGroup
+        selectedGroup === ALL_GROUP_OPTION || item.category === selectedGroup
 
       return matchSearch && matchType && matchGroup
     })
   }, [medicines, search, selectedTypes, selectedGroup])
+
+  const displayGroupOptions = useMemo(
+    () => [ALL_GROUP_OPTION, ...groupOptions],
+    [],
+  )
+
+  const handleSelectGroup = (group) => {
+    setSelectedGroup((prev) => (prev === group ? ALL_GROUP_OPTION : group))
+  }
 
   const handleCloseModal = () => {
     setShowModal(false)
@@ -248,6 +260,63 @@ export default function Medicines() {
     handleCloseModal()
   }
 
+  const handleExportPdf = () => {
+    if (filteredMedicines.length === 0) {
+      alert('Không có dữ liệu để xuất file.')
+      return
+    }
+
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' })
+    const pageWidth = doc.internal.pageSize.getWidth()
+    const pageHeight = doc.internal.pageSize.getHeight()
+    const marginX = 12
+    const rowHeight = 7
+    let y = 14
+
+    doc.setFontSize(13)
+    doc.text('DANH SACH THUOC DANG HIEN THI', marginX, y)
+    y += 6
+    doc.setFontSize(9)
+    doc.text(`So luong: ${filteredMedicines.length}`, marginX, y)
+    y += 8
+
+    const drawHeader = () => {
+      doc.setFontSize(9)
+      doc.setFillColor(240, 249, 255)
+      doc.rect(marginX, y - 4.5, pageWidth - marginX * 2, rowHeight, 'F')
+      doc.text('Ma hang', marginX + 2, y)
+      doc.text('Ten hang', marginX + 30, y)
+      doc.text('Don vi', marginX + 106, y)
+      doc.text('Gia von', marginX + 126, y, { align: 'right' })
+      doc.text('Gia ban', marginX + 150, y, { align: 'right' })
+      doc.text('Loai hang', marginX + 180, y, { align: 'right' })
+      y += rowHeight
+    }
+
+    const ensureSpace = () => {
+      if (y <= pageHeight - 14) return
+      doc.addPage()
+      y = 14
+      drawHeader()
+    }
+
+    drawHeader()
+
+    doc.setFontSize(8.5)
+    filteredMedicines.forEach((item) => {
+      ensureSpace()
+      doc.text(String(item.id || ''), marginX + 2, y)
+      doc.text(String(item.name || ''), marginX + 30, y, { maxWidth: 72 })
+      doc.text(String(item.unit || ''), marginX + 106, y, { maxWidth: 16 })
+      doc.text(formatMoney(item.costPrice), marginX + 126, y, { align: 'right' })
+      doc.text(formatMoney(item.salePrice), marginX + 150, y, { align: 'right' })
+      doc.text(String(item.type || ''), marginX + 180, y, { align: 'right', maxWidth: 28 })
+      y += rowHeight
+    })
+
+    doc.save('danh-sach-thuoc-hien-thi.pdf')
+  }
+
   return (
     <div className="w-full space-y-4 pt-0 animate-in fade-in duration-300">
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[280px_minmax(0,1fr)]">
@@ -266,10 +335,10 @@ export default function Medicines() {
             </div>
 
             <div className="custom-scrollbar mt-4 max-h-[460px] space-y-1 overflow-y-auto pr-2">
-              {groupOptions.map((item) => (
+              {displayGroupOptions.map((item) => (
                 <button
                   key={item}
-                  onClick={() => setSelectedGroup(item)}
+                  onClick={() => handleSelectGroup(item)}
                   className={`block w-full rounded-xl px-4 py-3 text-left text-sm transition ${
                     selectedGroup === item
                       ? 'bg-emerald-50 font-semibold text-emerald-600'
@@ -307,9 +376,13 @@ export default function Medicines() {
                 Thêm mới
               </button>
 
-              <button className="flex items-center gap-2 rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700 hover:bg-emerald-100 transition">
+              <button
+                onClick={handleExportPdf}
+                disabled={filteredMedicines.length === 0}
+                className="flex items-center gap-2 rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+              >
                 <FaFileExport />
-                Xuất file
+                Xuất PDF
               </button>
             </div>
           </div>

@@ -21,7 +21,7 @@ export default function Sidebar() {
     { to: '/admin', label: 'Dashboard', icon: <FaChartPie /> },
     { to: '/employees', label: 'Quản lý nhân viên', icon: <FaUserTie /> },
     { to: '/medicines', label: 'Quản lý thuốc', icon: <FaPills /> },
-    { to: '/inventory', label: 'Kho hàng', icon: <FaWarehouse /> },
+    { to: '/inventory', label: 'Quản lý kho', icon: <FaWarehouse /> },
     { to: '/customers', label: 'Khách hàng', icon: <FaUsers /> },
     { to: '/orders', label: 'Đơn hàng', icon: <FaFileInvoiceDollar /> },
   ]
@@ -30,7 +30,7 @@ export default function Sidebar() {
     { to: '/staff', label: 'Tổng quan', icon: <FaChartPie /> },
     { to: '/sales', label: 'Bán hàng', icon: <FaCashRegister /> }, // <-- SỬA TỪ '/cashier' THÀNH '/sales'
     { to: '/orders', label: 'Đơn hàng', icon: <FaFileInvoiceDollar /> },
-    { to: '/inventory', label: 'Kiểm tra kho', icon: <FaWarehouse /> },
+    { to: '/inventory', label: 'Tra cứu kho', icon: <FaWarehouse /> },
   ]
 
   const menuItems = user.role === 'admin' ? adminMenu : staffMenu

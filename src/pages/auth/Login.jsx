@@ -52,12 +52,18 @@ export default function Login() {
         email: data.email,
         role: 'admin',
         name: 'Quản trị viên',
+        employeeId: 'NV001',
+        accountId: 1,
+        isRoot: true,
       }
     } else if (data.email === 'staff@gmail.com' && data.password === '123456') {
       user = {
         email: data.email,
         role: 'staff',
         name: 'Nhân viên',
+        employeeId: 'NV002',
+        accountId: 2,
+        isRoot: false,
       }
     } else {
       alert('Sai tài khoản hoặc mật khẩu')
