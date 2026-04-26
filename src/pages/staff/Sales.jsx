@@ -89,6 +89,7 @@ export default function Sales() {
   const [invoiceId, setInvoiceId] = useState(generateInvoiceId())
   const [customerName, setCustomerName] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
+  const [customerErrors, setCustomerErrors] = useState({ name: '', phone: '' })
 
   // State lưu thông tin thuốc đang được chọn để hiển thị Modal
   const [selectedMedicine, setSelectedMedicine] = useState(null)
@@ -193,6 +194,7 @@ export default function Sales() {
     setCart([])
     setCustomerName('')
     setCustomerPhone('')
+    setCustomerErrors({ name: '', phone: '' })
     setInvoiceId(generateInvoiceId())
   }
 
@@ -212,7 +214,18 @@ export default function Sales() {
       showAlert('Cảnh báo', 'Giỏ hàng đang trống! Vui lòng chọn sản phẩm trước khi thanh toán.')
       return
     }
-    const finalCustomer = customerName.trim() || 'Khách lẻ'
+    const finalCustomer = customerName.trim()
+    const finalPhone = customerPhone.trim()
+
+    if (!finalCustomer || !finalPhone) {
+      setCustomerErrors({
+        name: finalCustomer ? '' : 'Tên khách hàng không được để trống',
+        phone: finalPhone ? '' : 'Số điện thoại không được để trống',
+      })
+      return
+    }
+
+    setCustomerErrors({ name: '', phone: '' })
     
     const currentUser = JSON.parse(localStorage.getItem('user') || 'null')
     const orderItems = cart.map((item) => ({
@@ -236,7 +249,7 @@ export default function Sales() {
     addOrder({
       id: invoiceId,
       customerName: finalCustomer,
-      phone: customerPhone || '',
+      phone: finalPhone,
       total: totalPrice,
       status: 'Hoàn thành',
       createdBy: currentUser?.name || 'Nhân viên',
@@ -245,7 +258,7 @@ export default function Sales() {
     })
 
     // Tạo nội dung chi tiết hóa đơn
-    const billDetails = `Hóa đơn: ${invoiceId}\nKhách hàng: ${finalCustomer}\nSố điện thoại: ${customerPhone || 'Không có'}\nTổng tiền thanh toán: ${formatMoney(totalPrice)}`
+    const billDetails = `Hóa đơn: ${invoiceId}\nKhách hàng: ${finalCustomer}\nSố điện thoại: ${finalPhone}\nTổng tiền thanh toán: ${formatMoney(totalPrice)}`
 
     showSuccess(
       'Thanh toán thành công!',
@@ -343,25 +356,51 @@ export default function Sales() {
             </div>
             
             <div className="space-y-2">
-              <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2">
-                <FaUserPlus className="text-slate-400 shrink-0" size={14} />
-                <input 
-                  type="text" 
-                  placeholder="Tên khách hàng (Mặc định: Khách lẻ)"
-                  value={customerName} 
-                  onChange={(e) => setCustomerName(e.target.value)}
-                  className="w-full outline-none text-sm text-slate-700 font-medium placeholder-slate-400"
-                />
+              <div>
+                <div className={`flex items-center gap-2 rounded-xl border bg-white px-3 py-2 ${
+                  customerErrors.name ? 'border-red-500' : 'border-slate-200'
+                }`}>
+                  <FaUserPlus className="text-slate-400 shrink-0" size={14} />
+                  <input 
+                    type="text" 
+                    placeholder="Tên khách hàng *"
+                    value={customerName} 
+                    onChange={(e) => {
+                      setCustomerName(e.target.value)
+                      if (customerErrors.name) {
+                        setCustomerErrors((prev) => ({ ...prev, name: '' }))
+                      }
+                    }}
+                    required
+                    className="w-full outline-none text-sm text-slate-700 font-medium placeholder-slate-400"
+                  />
+                </div>
+                {customerErrors.name && (
+                  <p className="mt-1 text-sm text-red-500">{customerErrors.name}</p>
+                )}
               </div>
-              <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2">
-                <FaPhoneAlt className="text-slate-400 shrink-0" size={14} />
-                <input 
-                  type="tel" 
-                  placeholder="Số điện thoại"
-                  value={customerPhone} 
-                  onChange={(e) => setCustomerPhone(e.target.value)}
-                  className="w-full outline-none text-sm text-slate-700 font-medium placeholder-slate-400"
-                />
+              <div>
+                <div className={`flex items-center gap-2 rounded-xl border bg-white px-3 py-2 ${
+                  customerErrors.phone ? 'border-red-500' : 'border-slate-200'
+                }`}>
+                  <FaPhoneAlt className="text-slate-400 shrink-0" size={14} />
+                  <input 
+                    type="tel" 
+                    placeholder="Số điện thoại *"
+                    value={customerPhone} 
+                    onChange={(e) => {
+                      setCustomerPhone(e.target.value)
+                      if (customerErrors.phone) {
+                        setCustomerErrors((prev) => ({ ...prev, phone: '' }))
+                      }
+                    }}
+                    required
+                    className="w-full outline-none text-sm text-slate-700 font-medium placeholder-slate-400"
+                  />
+                </div>
+                {customerErrors.phone && (
+                  <p className="mt-1 text-sm text-red-500">{customerErrors.phone}</p>
+                )}
               </div>
             </div>
           </div>
