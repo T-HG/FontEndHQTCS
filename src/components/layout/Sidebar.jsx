@@ -30,7 +30,6 @@ export default function Sidebar() {
     { to: '/staff', label: 'Tổng quan', icon: <FaChartPie /> },
     { to: '/sales', label: 'Bán hàng', icon: <FaCashRegister /> }, // <-- SỬA TỪ '/cashier' THÀNH '/sales'
     { to: '/orders', label: 'Đơn hàng', icon: <FaFileInvoiceDollar /> },
-    { to: '/inventory', label: 'Tra cứu kho', icon: <FaWarehouse /> },
   ]
 
   const menuItems = user.role === 'admin' ? adminMenu : staffMenu

@@ -70,7 +70,7 @@ export default function AppRoutes() {
         <Route
           path="inventory"
           element={
-            <ProtectedRoute allowRoles={['admin', 'staff']}>
+            <ProtectedRoute allowRoles={['admin']}>
               <Inventory />
             </ProtectedRoute>
           }

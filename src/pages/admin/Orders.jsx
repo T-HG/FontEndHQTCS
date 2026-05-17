@@ -38,12 +38,13 @@ export default function Orders() {
       : 'Theo dõi các hóa đơn do tài khoản của bạn thực hiện',
   )
 
-  const { orders, updateOrderStatus } = useInventoryAlerts()
+  const { orders, returnOrderItems } = useInventoryAlerts()
   const [search, setSearch] = useState('')
   const [selectedStatus, setSelectedStatus] = useState('Tất cả')
   
   // State cho Modal chi tiết
   const [selectedOrder, setSelectedOrder] = useState(null)
+  const [returnDraft, setReturnDraft] = useState({})
 
   // Lọc đơn hàng
   const scopedOrders = useMemo(() => {
@@ -78,6 +79,30 @@ export default function Orders() {
       default:
         return 'bg-slate-100 text-slate-600'
     }
+  }
+
+  const openOrderDetail = (order) => {
+    setSelectedOrder(order)
+    setReturnDraft({})
+  }
+
+  const handleReturnQtyChange = (itemId, value) => {
+    setReturnDraft((prev) => ({ ...prev, [itemId]: value }))
+  }
+
+  const handleSubmitReturn = () => {
+    if (!selectedOrder) return
+    const lines = selectedOrder.items.map((item) => ({
+      id: item.id,
+      qty: Number(returnDraft[item.id] || 0),
+    }))
+    const ok = returnOrderItems(selectedOrder.id, lines)
+    if (!ok) {
+      alert('Vui lòng nhập số lượng hoàn hợp lệ.')
+      return
+    }
+    setSelectedOrder(null)
+    setReturnDraft({})
   }
 
   const handleExportOrders = () => {
@@ -268,26 +293,13 @@ export default function Orders() {
                         {formatMoney(item.total)}
                       </td>
                       <td className="p-4 text-center">
-                        <select
-                          value={normalizeOrderStatus(item.status)}
-                          onChange={(e) => updateOrderStatus(item.id, e.target.value)}
-                          disabled={!isAdmin}
-                          className={`rounded-xl border px-3 py-2 text-xs font-semibold outline-none ${getStatusBadge(normalizeOrderStatus(item.status))} border-transparent ${
-                            !isAdmin ? 'cursor-not-allowed opacity-80' : ''
-                          }`}
-                        >
-                          {statusOptions
-                            .filter((status) => status !== 'Tất cả')
-                            .map((status) => (
-                              <option key={status} value={status}>
-                                {status}
-                              </option>
-                            ))}
-                        </select>
+                        <span className={`inline-block rounded-full px-3 py-1 text-xs font-semibold ${getStatusBadge(normalizeOrderStatus(item.status))}`}>
+                          {normalizeOrderStatus(item.status)}
+                        </span>
                       </td>
                       <td className="p-4 text-center">
                         <button
-                          onClick={() => setSelectedOrder(item)}
+                          onClick={() => openOrderDetail(item)}
                           className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-slate-100 text-slate-600 hover:bg-blue-50 hover:text-blue-600"
                           title="Xem chi tiết"
                         >
@@ -369,19 +381,38 @@ export default function Orders() {
                       <th className="p-3 text-center">ĐVT</th>
                       <th className="p-3 text-center">SL</th>
                       <th className="p-3 text-right">Đơn giá</th>
+                      {!isAdmin && normalizeOrderStatus(selectedOrder.status) !== 'Đã hủy' && (
+                        <th className="p-3 text-center">Hoàn</th>
+                      )}
                       <th className="p-3 text-right">Thành tiền</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {selectedOrder.items.map((item, index) => (
-                      <tr key={index} className="border-t border-slate-100">
-                        <td className="p-3 font-medium text-slate-700">{item.name}</td>
-                        <td className="p-3 text-center text-slate-600">{item.unit}</td>
-                        <td className="p-3 text-center text-slate-600">{item.qty}</td>
-                        <td className="p-3 text-right text-slate-600">{formatMoney(item.price)}</td>
-                        <td className="p-3 text-right font-semibold text-slate-800">{formatMoney(item.total)}</td>
-                      </tr>
-                    ))}
+                    {selectedOrder.items.map((item, index) => {
+                      const maxReturnable = Math.max(0, Number(item.qty || 0))
+                      return (
+                        <tr key={index} className="border-t border-slate-100">
+                          <td className="p-3 font-medium text-slate-700">{item.name}</td>
+                          <td className="p-3 text-center text-slate-600">{item.unit}</td>
+                          <td className="p-3 text-center text-slate-600">{item.qty}</td>
+                          <td className="p-3 text-right text-slate-600">{formatMoney(item.price)}</td>
+                          {!isAdmin && normalizeOrderStatus(selectedOrder.status) !== 'Đã hủy' && (
+                            <td className="p-3 text-center">
+                              <input
+                                type="number"
+                                min="0"
+                                max={maxReturnable}
+                                value={returnDraft[item.id] || ''}
+                                onChange={(e) => handleReturnQtyChange(item.id, e.target.value)}
+                                className="w-20 rounded-lg border border-slate-200 px-2 py-1 text-center outline-none focus:border-blue-400"
+                                placeholder="0"
+                              />
+                            </td>
+                          )}
+                          <td className="p-3 text-right font-semibold text-slate-800">{formatMoney(item.total)}</td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -403,14 +434,25 @@ export default function Orders() {
 
             <div className="flex items-center justify-end gap-3 border-t border-slate-100 px-6 py-4">
               {!isAdmin && (
-                <button
-                  type="button"
-                  onClick={handleExportInvoicePdf}
-                  className="flex items-center gap-2 rounded-xl bg-slate-100 px-4 py-2.5 font-medium text-slate-600 hover:bg-slate-200"
-                >
-                  <FaPrint />
-                  In hóa đơn
-                </button>
+                <>
+                  {normalizeOrderStatus(selectedOrder.status) !== 'Đã hủy' && (
+                    <button
+                      type="button"
+                      onClick={handleSubmitReturn}
+                      className="flex items-center gap-2 rounded-xl bg-yellow-500 px-4 py-2.5 font-medium text-white hover:bg-yellow-600"
+                    >
+                      Hoàn hàng
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleExportInvoicePdf}
+                    className="flex items-center gap-2 rounded-xl bg-slate-100 px-4 py-2.5 font-medium text-slate-600 hover:bg-slate-200"
+                  >
+                    <FaPrint />
+                    In hóa đơn
+                  </button>
+                </>
               )}
               <button
                 onClick={() => setSelectedOrder(null)}

@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import {
   FaCalendarAlt,
-  FaFileExport,
 } from 'react-icons/fa'
 import {
   BarChart,
@@ -12,6 +11,7 @@ import {
   Tooltip as RechartsTooltip,
   ResponsiveContainer,
 } from 'recharts'
+import { useInventoryAlerts } from '../../context/InventoryAlertContext'
 
 // --- DỮ LIỆU MẪU (MOCK DATA) ---
 
@@ -41,6 +41,21 @@ function formatMoney(value) {
 
 export default function AdminRevenueReport() {
   const [dateFilter, setDateFilter] = useState('week')
+  const { orders } = useInventoryAlerts()
+  const revenueByEmployee = Object.values(
+    orders.reduce((acc, order) => {
+      if (order.status === 'Đã hủy') return acc
+      const employeeName = order.createdBy || 'Không xác định'
+      acc[employeeName] = acc[employeeName] || {
+        name: employeeName,
+        orders: 0,
+        revenue: 0,
+      }
+      acc[employeeName].orders += 1
+      acc[employeeName].revenue += Number(order.total || 0)
+      return acc
+    }, {}),
+  )
 
   return (
     <section id="bao-cao-doanh-thu" className="scroll-mt-6 space-y-6">
@@ -93,7 +108,7 @@ export default function AdminRevenueReport() {
           </div>
         </div>
 
-        {/* Biểu đồ & Top Thuốc */}
+        {/* Biểu đồ, doanh thu theo nhân viên & Top Thuốc */}
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
           {/* Biểu đồ cột */}
           <div className="rounded-[24px] bg-white p-6 shadow-lg ring-1 ring-slate-100">
@@ -114,6 +129,39 @@ export default function AdminRevenueReport() {
                   <Bar dataKey="revenue" fill="#3b82f6" radius={[4, 4, 0, 0]} name="Doanh thu" />
                 </BarChart>
               </ResponsiveContainer>
+            </div>
+          </div>
+
+          <div className="rounded-[24px] bg-white p-6 shadow-lg ring-1 ring-slate-100">
+            <h3 className="mb-4 font-bold text-slate-800">Doanh thu theo nhân viên</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-100 text-left text-slate-500">
+                    <th className="pb-3 font-medium">Nhân viên</th>
+                    <th className="pb-3 text-right font-medium">Đơn hàng</th>
+                    <th className="pb-3 text-right font-medium">Doanh thu</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {revenueByEmployee.map((item) => (
+                    <tr key={item.name} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/50 transition">
+                      <td className="py-3 font-medium text-slate-700">{item.name}</td>
+                      <td className="py-3 text-right text-slate-600">{item.orders}</td>
+                      <td className="py-3 text-right font-medium text-slate-800">
+                        {formatMoney(item.revenue)}
+                      </td>
+                    </tr>
+                  ))}
+                  {revenueByEmployee.length === 0 && (
+                    <tr>
+                      <td colSpan="3" className="py-8 text-center text-slate-400">
+                        Chưa có dữ liệu doanh thu theo nhân viên
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
 

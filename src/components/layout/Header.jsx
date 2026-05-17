@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { FaBell } from 'react-icons/fa'
-import { getDisplayStatus, useInventoryAlerts } from '../../context/InventoryAlertContext'
+import {
+  getDisplayStatus,
+  getExpiryWarning,
+  useInventoryAlerts,
+} from '../../context/InventoryAlertContext'
 import { useNavigate } from 'react-router-dom'
 import { usePageHeader } from '../../context/PageHeaderContext'
 
@@ -9,12 +13,32 @@ export default function Header() {
   const [user, setUser] = useState(() => JSON.parse(localStorage.getItem('user') || 'null'))
   const [openLowStockPopup, setOpenLowStockPopup] = useState(false)
   const notificationRef = useRef(null)
-  const { lowStockAlerts, pendingAlerts } = useInventoryAlerts()
+  const { medicines, lowStockAlerts } = useInventoryAlerts()
   const { pageHeader } = usePageHeader()
   const isAdmin = user?.role === 'admin'
-  const lowStockCount = lowStockAlerts.length
-  const lowStockPreview = useMemo(() => lowStockAlerts.slice(0, 6), [lowStockAlerts])
-  const pendingPreview = useMemo(() => pendingAlerts.slice(0, 6), [pendingAlerts])
+  const expiryAlerts = useMemo(
+    () =>
+      medicines
+        .map((medicine) => ({
+          medicine,
+          expiry: getExpiryWarning(medicine),
+        }))
+        .filter((item) => item.expiry.isWarning),
+    [medicines],
+  )
+  const notificationItems = useMemo(() => {
+    const map = new Map()
+    lowStockAlerts.forEach((medicine) => {
+      map.set(medicine.id, { medicine, lowStock: true, expiry: getExpiryWarning(medicine) })
+    })
+    expiryAlerts.forEach(({ medicine, expiry }) => {
+      const prev = map.get(medicine.id) || { medicine, lowStock: false, expiry }
+      map.set(medicine.id, { ...prev, expiry })
+    })
+    return [...map.values()]
+  }, [expiryAlerts, lowStockAlerts])
+  const notificationCount = notificationItems.length
+  const notificationPreview = useMemo(() => notificationItems.slice(0, 8), [notificationItems])
 
   useEffect(() => {
     const syncUser = () => setUser(JSON.parse(localStorage.getItem('user') || 'null'))
@@ -48,12 +72,8 @@ export default function Header() {
     navigate('/login')
   }
 
-  const handleAlertClick = (alertId) => {
+  const handleAlertClick = () => {
     setOpenLowStockPopup(false)
-    if (isAdmin && alertId) {
-      navigate(`/inventory?processAlert=${encodeURIComponent(alertId)}`)
-      return
-    }
     navigate('/inventory')
   }
 
@@ -82,12 +102,12 @@ export default function Header() {
                 type="button"
                 onClick={() => setOpenLowStockPopup((prev) => !prev)}
                 className="relative inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white text-slate-600 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-50"
-                title="Cảnh báo tồn kho thấp"
+                title="Thông báo kho"
               >
                 <FaBell />
-                {lowStockCount > 0 && (
+                {notificationCount > 0 && (
                   <span className="absolute -right-1 -top-1 inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
-                    {lowStockCount}
+                    {notificationCount}
                   </span>
                 )}
               </button>
@@ -95,42 +115,43 @@ export default function Header() {
               {isAdmin && openLowStockPopup && (
                 <div className="absolute right-0 top-12 z-[100] w-80 max-w-[calc(100vw-2rem)] rounded-2xl border border-slate-200 bg-white p-4 shadow-xl">
                   <div className="mb-3 flex items-center justify-between">
-                    <h3 className="text-sm font-bold text-slate-900">Cảnh báo tồn kho thấp</h3>
+                    <h3 className="text-sm font-bold text-slate-900">Thông báo kho</h3>
                     <span className="rounded-full bg-red-50 px-2 py-1 text-[10px] font-bold text-red-600">
-                      {lowStockCount} cảnh báo
+                      {notificationCount} thông báo
                     </span>
                   </div>
 
-                  {(isAdmin ? pendingPreview : lowStockPreview).length === 0 ? (
+                  {notificationPreview.length === 0 ? (
                     <p className="rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-500">
-                      Không có mặt hàng nào dưới mức tồn kho tối thiểu.
+                      Không có thuốc sắp hết hàng hoặc hết hạn.
                     </p>
                   ) : (
                     <div className="space-y-2">
-                      {(isAdmin ? pendingPreview : lowStockPreview).map((item) => {
-                        const isPendingItem = Boolean(item.medicineId)
-                        const medicine = isPendingItem
-                          ? lowStockAlerts.find((m) => m.id === item.medicineId)
-                          : item
-                        if (!medicine) return null
+                      {notificationPreview.map(({ medicine, lowStock, expiry }) => {
                         const status = getDisplayStatus(medicine)
                         return (
                           <button
-                            key={item.id}
+                            key={medicine.id}
                             type="button"
-                            onClick={() => handleAlertClick(isPendingItem ? item.id : null)}
+                            onClick={handleAlertClick}
                             className="w-full rounded-xl bg-slate-50 px-3 py-2 text-left transition hover:bg-slate-100"
                           >
                             <p className="text-xs font-semibold text-slate-800">
                               {medicine.name} ({medicine.id})
                             </p>
-                            <p className="mt-1 text-[11px] text-slate-600">
-                              Tồn: <span className="font-bold text-red-600">{medicine.stock}</span> /
-                              Min: {medicine.minStock}
-                            </p>
-                            <p className="mt-1 text-[11px] font-semibold text-slate-500">
-                              Trạng thái: {status.label}
-                            </p>
+                            {lowStock && (
+                              <p className="mt-1 text-[11px] text-slate-600">
+                                Tồn: <span className="font-bold text-red-600">{medicine.stock}</span> /
+                                Min: {medicine.minStock} · {status.label}
+                              </p>
+                            )}
+                            {expiry.isWarning && expiry.batch && (
+                              <p className="mt-1 text-[11px] font-semibold text-red-600">
+                                {expiry.isExpired
+                                  ? `Lô ${expiry.batch.lotCode} quá hạn ${Math.abs(expiry.daysLeft)} ngày`
+                                  : `Lô ${expiry.batch.lotCode} còn ${expiry.daysLeft} ngày HSD`}
+                              </p>
+                            )}
                           </button>
                         )
                       })}

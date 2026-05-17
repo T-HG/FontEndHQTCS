@@ -1,102 +1,10 @@
 import { useMemo, useState } from 'react'
-import { jsPDF } from 'jspdf'
 import {
-  FaPlus,
-  FaFileImport,
-  FaFileExport,
   FaSearch,
   FaTimes,
 } from 'react-icons/fa'
 import { useInventoryAlerts } from '../../context/InventoryAlertContext'
 import { useSetPageHeader } from '../../context/PageHeaderContext'
-
-const initialMedicines = [
-  {
-    id: 'SP000032',
-    name: 'PQA viêm mũi dị ứng',
-    unit: 'Lọ',
-    type: 'Thuốc kê đơn',
-    category: 'Thuốc dị ứng',
-    costPrice: 1200,
-    salePrice: 800,
-    stock: 464,
-    directSale: true,
-    group: 'Thuốc kê đơn',
-    route: 'Uống',
-    location: 'Kệ A1',
-    ingredient: 'Tân di, Ké đầu ngựa, Bạch chỉ...',
-    usage: 'Hỗ trợ điều trị viêm mũi dị ứng, ngạt mũi, chảy nước mũi',
-    dosage: 'Uống 2-3 lần/ngày, mỗi lần 15-20ml sau ăn.',
-  },
-  {
-    id: 'SP000031',
-    name: 'Ibuprofen 400mg',
-    unit: 'Viên',
-    type: 'Thuốc không kê đơn',
-    category: 'Giảm đau',
-    costPrice: 10000,
-    salePrice: 7900,
-    stock: 30,
-    directSale: true,
-    group: 'Thuốc giảm đau',
-    route: 'Uống',
-    location: 'Kệ A2',
-    ingredient: 'Ibuprofen 400mg',
-    usage: 'Giảm các cơn đau nhẹ đến vừa, chống viêm không steroid',
-    dosage: 'Người lớn: 1 viên/lần x 2-3 lần/ngày. Uống sau ăn no.',
-  },
-  {
-    id: 'SP000030',
-    name: 'Telfast BD',
-    unit: 'Viên',
-    type: 'Thuốc không kê đơn',
-    category: 'Thuốc dị ứng',
-    costPrice: 180000,
-    salePrice: 162000,
-    stock: 200,
-    directSale: true,
-    group: 'Thuốc dị ứng',
-    route: 'Uống',
-    location: 'Kệ B1',
-    ingredient: 'Fexofenadine hydrochloride 60mg',
-    usage: 'Điều trị các triệu chứng viêm mũi dị ứng theo mùa, mề đay',
-    dosage: 'Người lớn và trẻ em > 12 tuổi: 1 viên x 2 lần/ngày.',
-  },
-  {
-    id: 'SP000029',
-    name: 'JointCarePlus - Mỹ',
-    unit: 'Hộp 60 viên',
-    type: 'Thuốc không kê đơn',
-    category: 'Thực phẩm chức năng',
-    costPrice: 6500,
-    salePrice: 5500,
-    stock: 50,
-    directSale: true,
-    group: 'TPCN',
-    route: 'Uống',
-    location: 'Kệ C1',
-    ingredient: 'Glucosamine, Chondroitin, MSM',
-    usage: 'Hỗ trợ tái tạo sụn khớp, giảm đau nhức xương khớp',
-    dosage: 'Người lớn: 1-2 viên/ngày sau bữa ăn.',
-  },
-  {
-    id: 'SP000028',
-    name: 'Tràng Vị Khang - Đông Á',
-    unit: 'Hộp',
-    type: 'Thuốc không kê đơn',
-    category: 'Tiêu hóa',
-    costPrice: 100000,
-    salePrice: 90000,
-    stock: 0,
-    directSale: false,
-    group: 'Thuốc tiêu hóa',
-    route: 'Uống',
-    location: 'Kệ B3',
-    ingredient: 'Ngưu nhĩ phong, La liễu',
-    usage: 'Hỗ trợ giảm viêm đại tràng cấp và mãn tính, tiêu hóa kém',
-    dosage: 'Pha với nước ấm. Uống 1 gói/lần x 3 lần/ngày.',
-  },
-]
 
 const groupOptions = [
   'Thuốc dị ứng',
@@ -131,11 +39,12 @@ export default function Medicines() {
     'Quản lý danh mục thuốc, tồn kho, giá bán và thông tin chi tiết',
   )
 
-  const { medicines, addMedicine } = useInventoryAlerts()
+  const { medicines, addMedicine, updateMedicine } = useInventoryAlerts()
   const [search, setSearch] = useState('')
   const [selectedTypes, setSelectedTypes] = useState([])
   const [selectedGroup, setSelectedGroup] = useState(ALL_GROUP_OPTION)
   const [showModal, setShowModal] = useState(false)
+  const [priceDrafts, setPriceDrafts] = useState({})
   
   // State quản lý Tab đang mở (info / details)
   const [activeTab, setActiveTab] = useState('info')
@@ -219,6 +128,33 @@ export default function Medicines() {
     }))
   }
 
+  const handlePriceDraftChange = (medicineId, value) => {
+    setPriceDrafts((prev) => ({
+      ...prev,
+      [medicineId]: value,
+    }))
+  }
+
+  const handleSaveListPrice = (medicine) => {
+    const rawValue = priceDrafts[medicine.id] ?? medicine.listPrice ?? medicine.salePrice ?? 0
+    const nextPrice = Number(rawValue)
+    if (!Number.isFinite(nextPrice) || nextPrice < 0) {
+      alert('Giá niêm yết không hợp lệ.')
+      return
+    }
+
+    updateMedicine(medicine.id, {
+      listPrice: nextPrice,
+      salePrice: nextPrice,
+      price: nextPrice,
+    })
+    setPriceDrafts((prev) => {
+      const next = { ...prev }
+      delete next[medicine.id]
+      return next
+    })
+  }
+
   const handleSubmitMedicine = (e) => {
     e.preventDefault()
 
@@ -258,63 +194,6 @@ export default function Medicines() {
 
     addMedicine(newItem)
     handleCloseModal()
-  }
-
-  const handleExportPdf = () => {
-    if (filteredMedicines.length === 0) {
-      alert('Không có dữ liệu để xuất file.')
-      return
-    }
-
-    const doc = new jsPDF({ unit: 'mm', format: 'a4' })
-    const pageWidth = doc.internal.pageSize.getWidth()
-    const pageHeight = doc.internal.pageSize.getHeight()
-    const marginX = 12
-    const rowHeight = 7
-    let y = 14
-
-    doc.setFontSize(13)
-    doc.text('DANH SACH THUOC DANG HIEN THI', marginX, y)
-    y += 6
-    doc.setFontSize(9)
-    doc.text(`So luong: ${filteredMedicines.length}`, marginX, y)
-    y += 8
-
-    const drawHeader = () => {
-      doc.setFontSize(9)
-      doc.setFillColor(240, 249, 255)
-      doc.rect(marginX, y - 4.5, pageWidth - marginX * 2, rowHeight, 'F')
-      doc.text('Ma hang', marginX + 2, y)
-      doc.text('Ten hang', marginX + 30, y)
-      doc.text('Don vi', marginX + 106, y)
-      doc.text('Gia von', marginX + 126, y, { align: 'right' })
-      doc.text('Gia ban', marginX + 150, y, { align: 'right' })
-      doc.text('Loai hang', marginX + 180, y, { align: 'right' })
-      y += rowHeight
-    }
-
-    const ensureSpace = () => {
-      if (y <= pageHeight - 14) return
-      doc.addPage()
-      y = 14
-      drawHeader()
-    }
-
-    drawHeader()
-
-    doc.setFontSize(8.5)
-    filteredMedicines.forEach((item) => {
-      ensureSpace()
-      doc.text(String(item.id || ''), marginX + 2, y)
-      doc.text(String(item.name || ''), marginX + 30, y, { maxWidth: 72 })
-      doc.text(String(item.unit || ''), marginX + 106, y, { maxWidth: 16 })
-      doc.text(formatMoney(item.costPrice), marginX + 126, y, { align: 'right' })
-      doc.text(formatMoney(item.salePrice), marginX + 150, y, { align: 'right' })
-      doc.text(String(item.type || ''), marginX + 180, y, { align: 'right', maxWidth: 28 })
-      y += rowHeight
-    })
-
-    doc.save('danh-sach-thuoc-hien-thi.pdf')
   }
 
   return (
@@ -368,22 +247,9 @@ export default function Medicines() {
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
-              <button
-                onClick={() => setShowModal(true)}
-                className="flex items-center gap-2 rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-medium text-white hover:bg-emerald-700 shadow-lg shadow-emerald-600/30 transition"
-              >
-                <FaPlus />
-                Thêm mới
-              </button>
-
-              <button
-                onClick={handleExportPdf}
-                disabled={filteredMedicines.length === 0}
-                className="flex items-center gap-2 rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <FaFileExport />
-                Xuất PDF
-              </button>
+              <span className="rounded-2xl bg-slate-100 px-4 py-3 text-sm font-medium text-slate-500">
+                Thêm/sửa/xóa thuốc tại Quản lý kho
+              </span>
             </div>
           </div>
 
@@ -395,8 +261,7 @@ export default function Medicines() {
                   <th className="whitespace-nowrap p-4">Mã hàng</th>
                   <th className="whitespace-nowrap p-4">Tên hàng</th>
                   <th className="whitespace-nowrap p-4">Đơn vị</th>
-                  <th className="whitespace-nowrap p-4 text-right">Giá vốn</th>
-                  <th className="whitespace-nowrap p-4 text-right">Giá bán</th>
+                  <th className="whitespace-nowrap p-4 text-right">Giá niêm yết</th>
                   <th className="whitespace-nowrap p-4">Loại hàng</th>
                 </tr>
               </thead>
@@ -407,9 +272,26 @@ export default function Medicines() {
                       <td className="p-4 font-semibold text-slate-800">{item.id}</td>
                       <td className="p-4 text-slate-700 font-medium">{item.name}</td>
                       <td className="p-4 text-slate-600">{item.unit}</td>
-                      <td className="p-4 text-slate-600 text-right">{formatMoney(item.costPrice)}</td>
-                      <td className="p-4 font-semibold text-slate-800 text-right">
-                        {formatMoney(item.salePrice)}
+                      <td className="p-4">
+                        <div className="flex items-center justify-end gap-2">
+                          <input
+                            type="number"
+                            min="0"
+                            value={priceDrafts[item.id] ?? item.listPrice ?? item.salePrice ?? 0}
+                            onChange={(e) => handlePriceDraftChange(item.id, e.target.value)}
+                            className="w-32 rounded-xl border border-slate-200 px-3 py-2 text-right font-semibold text-slate-800 outline-none transition focus:border-emerald-400"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleSaveListPrice(item)}
+                            className="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100"
+                          >
+                            Lưu
+                          </button>
+                        </div>
+                        <p className="mt-1 text-right text-xs text-slate-400">
+                          {formatMoney(item.listPrice || item.salePrice)} đ
+                        </p>
                       </td>
                       <td className="p-4">
                         <span className={`inline-block rounded-full px-3 py-1 text-xs font-semibold ${item.type === 'Thuốc kê đơn' ? 'bg-orange-50 text-orange-600' : 'bg-emerald-50 text-emerald-600'}`}>
@@ -420,7 +302,7 @@ export default function Medicines() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="6" className="p-10 text-center text-slate-400">
+                    <td colSpan="5" className="p-10 text-center text-slate-400">
                       Không có dữ liệu phù hợp
                     </td>
                   </tr>

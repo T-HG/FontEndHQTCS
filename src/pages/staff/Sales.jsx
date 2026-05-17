@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { useInventoryAlerts } from '../../context/InventoryAlertContext'
+import { getDisplayStatus, useInventoryAlerts } from '../../context/InventoryAlertContext'
 import { useSetPageHeader } from '../../context/PageHeaderContext'
 import {
   FaSearch,
@@ -16,17 +16,6 @@ import {
   FaExclamationTriangle,
   FaCheckCircle
 } from 'react-icons/fa'
-
-const priceMap = {
-  SP001: 15000,
-  SP002: 162000,
-  SP003: 85000,
-  SP004: 5000,
-  SP005: 7900,
-  SP006: 90000,
-  SP007: 6000,
-  SP008: 35000,
-}
 
 const categoryMap = {
   SP001: 'Giảm đau',
@@ -75,8 +64,8 @@ export default function Sales() {
     () =>
       inventoryMedicines.map((item) => ({
         ...item,
-        price: priceMap[item.id] || 0,
-        category: categoryMap[item.id] || 'Khác',
+        price: Number(item.listPrice || item.salePrice || item.price || 0),
+        category: item.category || categoryMap[item.id] || 'Khác',
         ingredient: ingredientMap[item.id] || 'Chưa cập nhật',
         usage: usageMap[item.id] || 'Chưa cập nhật',
       })),
@@ -141,6 +130,10 @@ export default function Sales() {
   }
 
   const handleAddToCart = (med) => {
+    if (med.status === 'INACTIVE') {
+      showAlert('Ngừng bán', `${med.name} hiện đang ở trạng thái ngừng bán.`)
+      return
+    }
     const availableStock = getAvailableStock(med.id, med.stock)
     if (availableStock <= 0) {
       showAlert('Hết hàng', `${med.name} hiện không còn tồn kho.`)
@@ -217,10 +210,10 @@ export default function Sales() {
     const finalCustomer = customerName.trim()
     const finalPhone = customerPhone.trim()
 
-    if (!finalCustomer || !finalPhone) {
+    if (finalPhone && !/^(0|\+84)[0-9]{9,10}$/.test(finalPhone)) {
       setCustomerErrors({
-        name: finalCustomer ? '' : 'Tên khách hàng không được để trống',
-        phone: finalPhone ? '' : 'Số điện thoại không được để trống',
+        name: '',
+        phone: 'Số điện thoại không đúng định dạng',
       })
       return
     }
@@ -248,7 +241,7 @@ export default function Sales() {
 
     addOrder({
       id: invoiceId,
-      customerName: finalCustomer,
+      customerName: finalCustomer || 'Khách lẻ',
       phone: finalPhone,
       total: totalPrice,
       status: 'Hoàn thành',
@@ -258,7 +251,7 @@ export default function Sales() {
     })
 
     // Tạo nội dung chi tiết hóa đơn
-    const billDetails = `Hóa đơn: ${invoiceId}\nKhách hàng: ${finalCustomer}\nSố điện thoại: ${finalPhone}\nTổng tiền thanh toán: ${formatMoney(totalPrice)}`
+    const billDetails = `Hóa đơn: ${invoiceId}\nKhách hàng: ${finalCustomer || 'Khách lẻ'}\nSố điện thoại: ${finalPhone || 'Không nhập'}\nTổng tiền thanh toán: ${formatMoney(totalPrice)}`
 
     showSuccess(
       'Thanh toán thành công!',
@@ -295,13 +288,14 @@ export default function Sales() {
             {filteredMedicines.length > 0 ? (
               filteredMedicines.map((med) => {
                 const availableStock = getAvailableStock(med.id, med.stock)
+                const status = getDisplayStatus(med)
 
                 return (
                   <div
                     key={med.id}
                     onClick={() => setSelectedMedicine(med)}
                     className={`relative flex cursor-pointer flex-col justify-between overflow-hidden rounded-2xl bg-white p-4 shadow-sm ring-1 transition select-none ${
-                      availableStock > 0
+                      availableStock > 0 && med.status !== 'INACTIVE'
                         ? 'ring-slate-100 hover:shadow-md hover:ring-blue-400'
                         : 'ring-red-100 opacity-75'
                     }`}
@@ -310,13 +304,24 @@ export default function Sales() {
                       <span className="mb-2 inline-block rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">
                         {med.category}
                       </span>
+                      <span
+                        className={`ml-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                          status.tone === 'safe'
+                            ? 'bg-emerald-50 text-emerald-600'
+                            : status.tone === 'pending'
+                              ? 'bg-yellow-50 text-yellow-700'
+                              : 'bg-red-50 text-red-600'
+                        }`}
+                      >
+                        {status.label}
+                      </span>
                       <h3 className="text-sm font-bold text-slate-800 line-clamp-2">{med.name}</h3>
                     </div>
                     
                     {/* Khu vực giá và nút Thêm vào giỏ */}
                     <div className="mt-4 flex items-end justify-between">
                       <div>
-                        <p className="text-xs text-slate-500">Kho: {availableStock} {med.unit}</p>
+                        <p className="text-xs text-slate-500">Kho khả dụng: {availableStock} {med.unit}</p>
                         <p className="text-base font-bold text-blue-600">{formatMoney(med.price)}</p>
                       </div>
 
@@ -326,7 +331,7 @@ export default function Sales() {
                           e.stopPropagation(); // Ngăn chặn mở Modal khi bấm nút này
                           handleAddToCart(med);
                         }}
-                        disabled={availableStock <= 0}
+                        disabled={availableStock <= 0 || med.status === 'INACTIVE'}
                         className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600 transition hover:bg-blue-600 hover:text-white disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-300"
                         title="Thêm vào giỏ"
                       >
@@ -363,7 +368,7 @@ export default function Sales() {
                   <FaUserPlus className="text-slate-400 shrink-0" size={14} />
                   <input 
                     type="text" 
-                    placeholder="Tên khách hàng *"
+                    placeholder="Khách lẻ"
                     value={customerName} 
                     onChange={(e) => {
                       setCustomerName(e.target.value)
@@ -371,7 +376,6 @@ export default function Sales() {
                         setCustomerErrors((prev) => ({ ...prev, name: '' }))
                       }
                     }}
-                    required
                     className="w-full outline-none text-sm text-slate-700 font-medium placeholder-slate-400"
                   />
                 </div>
@@ -386,7 +390,7 @@ export default function Sales() {
                   <FaPhoneAlt className="text-slate-400 shrink-0" size={14} />
                   <input 
                     type="tel" 
-                    placeholder="Số điện thoại *"
+                    placeholder="Số điện thoại (không bắt buộc)"
                     value={customerPhone} 
                     onChange={(e) => {
                       setCustomerPhone(e.target.value)
@@ -394,7 +398,6 @@ export default function Sales() {
                         setCustomerErrors((prev) => ({ ...prev, phone: '' }))
                       }
                     }}
-                    required
                     className="w-full outline-none text-sm text-slate-700 font-medium placeholder-slate-400"
                   />
                 </div>
@@ -479,6 +482,22 @@ export default function Sales() {
             </div>
 
             <div className="p-6">
+              {(() => {
+                const status = getDisplayStatus(selectedMedicine)
+                return (
+                  <div
+                    className={`mb-4 rounded-2xl px-4 py-3 text-sm font-semibold ${
+                      status.tone === 'safe'
+                        ? 'bg-emerald-50 text-emerald-700'
+                        : status.tone === 'pending'
+                          ? 'bg-yellow-50 text-yellow-700'
+                          : 'bg-red-50 text-red-600'
+                    }`}
+                  >
+                    Trạng thái thuốc: {status.label}
+                  </div>
+                )
+              })()}
               <div className="mb-4 flex items-start justify-between gap-4">
                 <div>
                   <h3 className="text-xl font-bold text-blue-700">{selectedMedicine.name}</h3>
@@ -487,7 +506,7 @@ export default function Sales() {
                 <div className="text-right">
                   <p className="text-2xl font-bold text-slate-900">{formatMoney(selectedMedicine.price)}</p>
                   <p className="text-sm font-medium text-emerald-600">
-                    Kho: {getAvailableStock(selectedMedicine.id, selectedMedicine.stock)} {selectedMedicine.unit}
+                    Kho khả dụng: {getAvailableStock(selectedMedicine.id, selectedMedicine.stock)} {selectedMedicine.unit}
                   </p>
                 </div>
               </div>

@@ -19,7 +19,6 @@ export default function AdminHome() {
   )
   const {
     lowStockAlerts,
-    pendingAlerts,
     customersFromOrders,
     orderStatusSummary,
   } = useInventoryAlerts()
@@ -49,15 +48,15 @@ export default function AdminHome() {
         icon: <FaUserFriends size={20} />,
       },
       {
-        title: 'Tồn kho cảnh báo',
+        title: 'Thuốc sắp hết hàng',
         value: String(lowStockAlerts.length),
         change:
-          pendingAlerts.length > 0
-            ? `${pendingAlerts.length} đang xử lý`
-            : orderStatusSummary.cancelled > 0
+          orderStatusSummary.cancelled > 0
             ? `${orderStatusSummary.cancelled} đơn đã hủy`
+            : lowStockAlerts.length > 0
+            ? 'Cần điều chỉnh trong kho'
             : 'Ổn định',
-        up: pendingAlerts.length === 0,
+        up: lowStockAlerts.length === 0,
         icon: <FaWarehouse size={20} />,
       },
     ],
@@ -67,7 +66,6 @@ export default function AdminHome() {
       lowStockAlerts.length,
       orderStatusSummary.cancelled,
       orderStatusSummary.completed,
-      pendingAlerts.length,
     ],
   )
 

@@ -2,17 +2,13 @@ import { useMemo, useState } from 'react'
 import { useInventoryAlerts } from '../../context/InventoryAlertContext'
 import { useSetPageHeader } from '../../context/PageHeaderContext'
 import {
-  FaFileExport,
+  FaEye,
   FaSearch,
+  FaTimes,
 } from 'react-icons/fa'
 
 function formatMoney(value) {
   return new Intl.NumberFormat('vi-VN').format(Number(value || 0)) + ' đ'
-}
-
-function csvSafe(value) {
-  const text = String(value ?? '')
-  return `"${text.replace(/"/g, '""')}"`
 }
 
 export default function Customers() {
@@ -21,8 +17,9 @@ export default function Customers() {
     'Danh sách khách hàng được tự động tạo từ các đơn hàng phát sinh',
   )
 
-  const { customersFromOrders } = useInventoryAlerts()
+  const { customersFromOrders, orders } = useInventoryAlerts()
   const [search, setSearch] = useState('')
+  const [selectedCustomer, setSelectedCustomer] = useState(null)
 
   // Lọc danh sách khách hàng
   const filteredCustomers = useMemo(() => {
@@ -37,40 +34,18 @@ export default function Customers() {
     })
   }, [customersFromOrders, search])
 
-  const handleExportCustomers = () => {
-    if (filteredCustomers.length === 0) {
-      alert('Không có dữ liệu để xuất file.')
-      return
-    }
+  const selectedCustomerOrders = useMemo(() => {
+    if (!selectedCustomer) return []
+    const customerName = selectedCustomer.name.trim().toLowerCase()
+    const customerPhone = selectedCustomer.phone.trim()
 
-    const headers = ['Mã KH', 'Tên khách hàng', 'Số điện thoại', 'Tổng bán']
-    const rows = filteredCustomers.map((item) => [
-      item.id,
-      item.name,
-      item.phone,
-      formatMoney(item.totalSpent),
-    ])
-
-    const csvContent = [headers, ...rows]
-      .map((row) => row.map((cell) => csvSafe(cell)).join(','))
-      .join('\n')
-
-    const now = new Date()
-    const stamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(
-      now.getDate(),
-    ).padStart(2, '0')}`
-    const fileName = `danh-sach-khach-hang-${stamp}.csv`
-
-    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' })
-    const url = window.URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = fileName
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    window.URL.revokeObjectURL(url)
-  }
+    return orders.filter((order) => {
+      const orderName = (order.customerName || '').trim().toLowerCase()
+      const orderPhone = (order.phone || '').trim()
+      if (customerPhone) return orderPhone === customerPhone
+      return orderName === customerName
+    })
+  }, [orders, selectedCustomer])
 
   return (
     <div className="w-full space-y-4 pt-0 animate-in fade-in duration-300">
@@ -89,16 +64,6 @@ export default function Customers() {
               />
             </div>
 
-            <div className="flex flex-wrap items-center gap-3">
-              <button
-                onClick={handleExportCustomers}
-                className="flex cursor-pointer items-center gap-2 rounded-2xl bg-blue-50 px-4 py-3 text-sm font-medium text-blue-700 hover:bg-blue-100 transition disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={filteredCustomers.length === 0}
-              >
-                <FaFileExport />
-                Xuất danh sách
-              </button>
-            </div>
           </div>
 
           {/* TABLE */}
@@ -110,23 +75,41 @@ export default function Customers() {
                   <th className="whitespace-nowrap p-4">Tên khách hàng</th>
                   <th className="whitespace-nowrap p-4">Số điện thoại</th>
                   <th className="whitespace-nowrap p-4 text-right">Tổng bán</th>
+                  <th className="whitespace-nowrap p-4 text-center">Thao tác</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredCustomers.length > 0 ? (
                   filteredCustomers.map((item) => (
-                    <tr key={item.id} className="border-t border-slate-100 hover:bg-slate-50 transition">
+                    <tr
+                      key={item.id}
+                      onClick={() => setSelectedCustomer(item)}
+                      className="cursor-pointer border-t border-slate-100 hover:bg-slate-50 transition"
+                    >
                       <td className="p-4 font-semibold text-slate-800">{item.id}</td>
                       <td className="p-4 font-medium text-blue-600">{item.name}</td>
                       <td className="p-4 text-slate-600">{item.phone}</td>
                       <td className="p-4 text-right font-semibold text-slate-800">
                         {formatMoney(item.totalSpent)}
                       </td>
+                      <td className="p-4 text-center">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setSelectedCustomer(item)
+                          }}
+                          className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600 transition hover:bg-blue-100"
+                          title="Xem đơn đã mua"
+                        >
+                          <FaEye />
+                        </button>
+                      </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="4" className="p-10 text-center text-slate-400">
+                    <td colSpan="5" className="p-10 text-center text-slate-400">
                       Không tìm thấy dữ liệu khách hàng
                     </td>
                   </tr>
@@ -149,6 +132,83 @@ export default function Customers() {
           </div>
         </div>
       </div>
+
+      {selectedCustomer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm">
+          <div className="max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-[28px] bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5">
+              <div>
+                <h2 className="text-xl font-bold text-slate-900">
+                  Đơn hàng của {selectedCustomer.name}
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  {selectedCustomer.phone || 'Không có số điện thoại'} · Tổng mua{' '}
+                  {formatMoney(selectedCustomer.totalSpent)}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedCustomer(null)}
+                className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-100 text-slate-500 transition hover:bg-slate-200"
+              >
+                <FaTimes />
+              </button>
+            </div>
+
+            <div className="max-h-[70vh] overflow-y-auto p-6">
+              <div className="overflow-x-auto rounded-2xl border border-slate-100">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 text-left text-slate-500">
+                    <tr>
+                      <th className="whitespace-nowrap p-4">Mã HĐ</th>
+                      <th className="whitespace-nowrap p-4">Thời gian</th>
+                      <th className="whitespace-nowrap p-4">Nhân viên</th>
+                      <th className="whitespace-nowrap p-4">Sản phẩm</th>
+                      <th className="whitespace-nowrap p-4 text-right">Tổng tiền</th>
+                      <th className="whitespace-nowrap p-4 text-center">Trạng thái</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedCustomerOrders.map((order) => (
+                      <tr key={order.id} className="border-t border-slate-100">
+                        <td className="p-4 font-semibold text-slate-800">{order.id}</td>
+                        <td className="p-4 text-slate-600">{order.date}</td>
+                        <td className="p-4 text-slate-600">{order.createdBy || '-'}</td>
+                        <td className="p-4 text-slate-700">
+                          {(order.items || [])
+                            .map((line) => `${line.name} x${line.qty}`)
+                            .join(', ') || '-'}
+                        </td>
+                        <td className="p-4 text-right font-semibold text-slate-800">
+                          {formatMoney(order.total)}
+                        </td>
+                        <td className="p-4 text-center">
+                          <span
+                            className={`inline-block rounded-full px-3 py-1 text-xs font-semibold ${
+                              order.status === 'Đã hủy'
+                                ? 'bg-red-50 text-red-600'
+                                : 'bg-emerald-50 text-emerald-600'
+                            }`}
+                          >
+                            {order.status || 'Hoàn thành'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                    {selectedCustomerOrders.length === 0 && (
+                      <tr>
+                        <td colSpan="6" className="p-10 text-center text-slate-400">
+                          Chưa tìm thấy đơn hàng của khách hàng này
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   )
