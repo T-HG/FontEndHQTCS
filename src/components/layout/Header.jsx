@@ -67,6 +67,8 @@ export default function Header() {
   }, [openLowStockPopup])
 
   const handleLogout = () => {
+    localStorage.removeItem('token')
+    localStorage.removeItem('accessToken')
     localStorage.removeItem('user')
     setUser(null)
     navigate('/login')

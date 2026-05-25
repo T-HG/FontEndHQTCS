@@ -4,12 +4,13 @@ import { yupResolver } from '@hookform/resolvers/yup'
 import * as yup from 'yup'
 import { Link, useNavigate } from 'react-router-dom'
 import { FaTimes } from 'react-icons/fa'
+import { login, getApiErrorMessage } from '../../api'
+import { useAppDialog } from '../../context/AppDialogContext'
 
 const schema = yup.object({
-  email: yup
+  username: yup
     .string()
-    .required('Email không được để trống')
-    .email('Email không đúng định dạng'),
+    .required('Tên đăng nhập không được để trống'),
   password: yup
     .string()
     .required('Mật khẩu không được để trống')
@@ -23,17 +24,15 @@ const forgotSchema = yup.object({
     .email('Email không đúng định dạng'),
 })
 
-const MOCK_REGISTERED_EMAILS = ['admin@gmail.com', 'staff@gmail.com']
-
 export default function Login() {
   const navigate = useNavigate()
+  const { showError } = useAppDialog()
   const [forgotOpen, setForgotOpen] = useState(false)
   const [forgotFeedback, setForgotFeedback] = useState(null)
 
   const {
     register,
     handleSubmit,
-    getValues,
     formState: { errors, isSubmitting },
   } = useForm({
     resolver: yupResolver(schema),
@@ -45,43 +44,28 @@ export default function Login() {
   })
 
   const onSubmit = async (data) => {
-    let user = null
+    try {
+      const { token, user } = await login(data)
 
-    if (data.email === 'admin@gmail.com' && data.password === '123456') {
-      user = {
-        email: data.email,
-        role: 'admin',
-        name: 'Quản trị viên',
-        employeeId: 'NV001',
-        accountId: 1,
-        isRoot: true,
+      if (token) {
+        localStorage.setItem('token', token)
+        localStorage.setItem('accessToken', token)
       }
-    } else if (data.email === 'staff@gmail.com' && data.password === '123456') {
-      user = {
-        email: data.email,
-        role: 'staff',
-        name: 'Nhân viên',
-        employeeId: 'NV002',
-        accountId: 2,
-        isRoot: false,
+      localStorage.setItem('user', JSON.stringify(user))
+
+      if (user.role === 'admin') {
+        navigate('/admin')
+      } else {
+        navigate('/staff')
       }
-    } else {
-      alert('Sai tài khoản hoặc mật khẩu')
-      return
-    }
-
-    localStorage.setItem('user', JSON.stringify(user))
-
-    if (user.role === 'admin') {
-      navigate('/admin')
-    } else {
-      navigate('/staff')
+    } catch (error) {
+      showError(getApiErrorMessage(error, 'Sai tài khoản hoặc mật khẩu'))
     }
   }
 
   const openForgotModal = () => {
     setForgotFeedback(null)
-    forgotForm.reset({ email: getValues('email') || '' })
+    forgotForm.reset({ email: '' })
     setForgotOpen(true)
   }
 
@@ -91,24 +75,12 @@ export default function Login() {
     forgotForm.reset({ email: '' })
   }
 
-  const onForgotSubmit = async (data) => {
+  const onForgotSubmit = async () => {
     setForgotFeedback(null)
-    await new Promise((r) => setTimeout(r, 600))
-
-    const email = data.email.trim().toLowerCase()
-    if (!MOCK_REGISTERED_EMAILS.includes(email)) {
-      setForgotFeedback({
-        type: 'error',
-        message:
-          'Không tìm thấy tài khoản với email này. Vui lòng kiểm tra lại hoặc đăng ký tài khoản mới.',
-      })
-      return
-    }
-
     setForgotFeedback({
-      type: 'success',
+      type: 'error',
       message:
-        'Đã gửi liên kết đặt lại mật khẩu đến email của bạn. Vui lòng kiểm tra hộp thư và thư mục spam.',
+        'Backend hiện chưa có API quên mật khẩu. Vui lòng liên hệ Admin để đổi mật khẩu.',
     })
   }
 
@@ -125,20 +97,21 @@ export default function Login() {
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
           <div>
             <label className="mb-2 block text-sm font-medium text-slate-700">
-              Email
+              Tên đăng nhập
             </label>
             <input
-              type="email"
-              placeholder="Nhập email"
-              {...register('email')}
+              type="text"
+              placeholder="Nhập tên đăng nhập"
+              autoComplete="username"
+              {...register('username')}
               className={`w-full rounded-xl border px-4 py-3 outline-none transition ${
-                errors.email
+                errors.username
                   ? 'border-red-500 focus:border-red-500'
                   : 'border-slate-300 focus:border-blue-500'
               }`}
             />
-            {errors.email && (
-              <p className="mt-1 text-sm text-red-500">{errors.email.message}</p>
+            {errors.username && (
+              <p className="mt-1 text-sm text-red-500">{errors.username.message}</p>
             )}
           </div>
 
@@ -182,8 +155,9 @@ export default function Login() {
         <p className="mt-6 text-center text-sm text-slate-600">
           Chưa có tài khoản?{' '}
           <Link to="/register" className="font-semibold text-blue-600 hover:underline">
-            Đăng ký ngay
+            Đăng ký
           </Link>
+          {' '}— tài khoản mới mặc định là Nhân viên bán hàng.
         </p>
       </div>
 

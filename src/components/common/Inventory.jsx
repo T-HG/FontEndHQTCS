@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   FaChevronDown,
   FaChevronRight,
@@ -17,6 +17,8 @@ import {
   useInventoryAlerts,
 } from '../../context/InventoryAlertContext'
 import { useSetPageHeader } from '../../context/PageHeaderContext'
+import { useAppDialog } from '../../context/AppDialogContext'
+import { getInventoryStats } from '../../api'
 
 const emptyMedicineForm = {
   id: '',
@@ -134,10 +136,19 @@ export default function Inventory() {
 
   const {
     medicines,
+    medicineMeta,
+    refreshMedicines,
+    loadMedicineDetail,
     addMedicine,
     updateMedicine,
+    deleteMedicine,
   } = useInventoryAlerts()
+  const { showAlert, showError } = useAppDialog()
   const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
+  const pageSize = 50
+  const [inventoryStats, setInventoryStats] = useState(null)
+  const [listLoading, setListLoading] = useState(false)
   const [filterStatus, setFilterStatus] = useState('Tất cả')
   const [stockSortOrder, setStockSortOrder] = useState(null) // null | asc | desc
   const [expandedMedicineIds, setExpandedMedicineIds] = useState({})
@@ -163,13 +174,6 @@ export default function Inventory() {
 
   const filteredData = useMemo(() => {
     const matched = medicines.filter((item) => {
-      const keyword = search.toLowerCase()
-
-      const matchSearch =
-        !keyword ||
-        item.name.toLowerCase().includes(keyword) ||
-        item.id.toLowerCase().includes(keyword)
-
       const status = getDisplayStatus(item)
       const matchStatus = (() => {
         if (filterStatus === 'Tất cả') return true
@@ -178,12 +182,60 @@ export default function Inventory() {
         return true
       })()
 
-      return matchSearch && matchStatus
+      return matchStatus
     })
     if (!stockSortOrder) return matched
     const sorted = [...matched].sort((a, b) => Number(a.stock || 0) - Number(b.stock || 0))
     return stockSortOrder === 'asc' ? sorted : sorted.reverse()
-  }, [medicines, search, filterStatus, stockSortOrder])
+  }, [medicines, filterStatus, stockSortOrder])
+
+  const loadStats = async () => {
+    try {
+      const stats = await getInventoryStats()
+      setInventoryStats(stats)
+    } catch {
+      setInventoryStats(null)
+    }
+  }
+
+  useEffect(() => {
+    loadStats()
+  }, [])
+
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      setListLoading(true)
+      try {
+        await refreshMedicines({ search: search.trim(), page, pageSize })
+      } finally {
+        setListLoading(false)
+      }
+    }, 300)
+
+    return () => clearTimeout(timer)
+  }, [search, page, refreshMedicines])
+
+  const inventorySummary = useMemo(() => {
+    if (inventoryStats) {
+      return {
+        totalMedicines: inventoryStats.totalMedicines || 0,
+        totalBatches: medicineMeta?.total || inventoryStats.totalMedicines || 0,
+        lowStock: inventoryStats.lowStock || 0,
+        expiredBatches: inventoryStats.expiredBatches || 0,
+        expiringBatches: inventoryStats.expiringBatches || 0,
+      }
+    }
+
+    return {
+      totalMedicines: medicineMeta?.total || 0,
+      totalBatches: medicineMeta?.total || 0,
+      lowStock: 0,
+      expiredBatches: 0,
+      expiringBatches: 0,
+    }
+  }, [inventoryStats, medicineMeta])
+
+  const totalPages = Math.max(1, Math.ceil((medicineMeta?.total || 0) / pageSize))
 
   const groupedFilteredData = useMemo(() => {
     return filteredData.reduce((groups, item) => {
@@ -193,41 +245,6 @@ export default function Inventory() {
       return groups
     }, {})
   }, [filteredData])
-
-  const inventorySummary = useMemo(() => {
-    return medicines.reduce(
-      (summary, medicine) => {
-        const status = getDisplayStatus(medicine)
-        const batches = medicine.batches || []
-        const batchSummary = batches.reduce(
-          (count, batch) => {
-            const warning = getExpiryWarning({ batches: [batch] })
-            if (warning.isExpired) return { ...count, expired: count.expired + 1 }
-            if (warning.isWarning) return { ...count, expiring: count.expiring + 1 }
-            return count
-          },
-          { expired: 0, expiring: 0 },
-        )
-
-        return {
-          totalMedicines: summary.totalMedicines + 1,
-          totalBatches: summary.totalBatches + batches.length,
-          lowStock: summary.lowStock + (status.tone === 'danger' ? 1 : 0),
-          expiredBatches: summary.expiredBatches + batchSummary.expired,
-          expiringBatches: summary.expiringBatches + batchSummary.expiring,
-          inactiveMedicines: summary.inactiveMedicines + (medicine.status === 'INACTIVE' ? 1 : 0),
-        }
-      },
-      {
-        totalMedicines: 0,
-        totalBatches: 0,
-        lowStock: 0,
-        expiredBatches: 0,
-        expiringBatches: 0,
-        inactiveMedicines: 0,
-      },
-    )
-  }, [medicines])
 
   const batchDetailMedicine = useMemo(
     () => medicines.find((medicine) => medicine.id === batchDetailModal.medicineId) || null,
@@ -247,14 +264,25 @@ export default function Inventory() {
     })
   }
 
-  const toggleMedicineBatches = (medicineId) => {
+  const toggleMedicineBatches = async (medicineId) => {
+    const willExpand = !expandedMedicineIds[medicineId]
     setExpandedMedicineIds((prev) => ({
       ...prev,
-      [medicineId]: !prev[medicineId],
+      [medicineId]: willExpand,
     }))
+
+    if (willExpand) {
+      const medicine = medicines.find((item) => item.id === medicineId)
+      if (!medicine?.batches?.length) {
+        await loadMedicineDetail(medicineId)
+      }
+    }
   }
 
-  const openBatchDetailModal = (medicine) => {
+  const openBatchDetailModal = async (medicine) => {
+    if (!medicine.batches?.length) {
+      await loadMedicineDetail(medicine.id)
+    }
     setBatchDetailModal({
       isOpen: true,
       medicineId: medicine.id,
@@ -350,7 +378,7 @@ export default function Inventory() {
     setImportForm(emptyImportForm)
   }
 
-  const submitImport = (e) => {
+  const submitImport = async (e) => {
     e.preventDefault()
     const medicine = matchedImportMedicine
     const isNewMedicine = !medicine
@@ -362,35 +390,35 @@ export default function Inventory() {
     const minStock = Number(importForm.minStock || 0)
 
     if (!medicineName) {
-      alert('Vui lòng nhập tên thuốc.')
+      showAlert('Thông báo', 'Vui lòng nhập tên thuốc.')
       return
     }
 
     if (!Number.isFinite(quantity) || quantity <= 0) {
-      alert('Số lượng nhập phải lớn hơn 0.')
+      showAlert('Thông báo', 'Số lượng nhập phải lớn hơn 0.')
       return
     }
     if (!Number.isFinite(importPrice) || importPrice < 0) {
-      alert('Giá nhập phải là số không âm.')
+      showAlert('Thông báo', 'Giá nhập phải là số không âm.')
       return
     }
     if (isNewMedicine && (!Number.isFinite(listPrice) || listPrice < 0 || !Number.isFinite(minStock) || minStock < 0)) {
-      alert('Giá niêm yết và tồn tối thiểu phải là số không âm.')
+      showAlert('Thông báo', 'Giá niêm yết và tồn tối thiểu phải là số không âm.')
       return
     }
     if (isNewMedicine && !importForm.unit.trim()) {
-      alert('Thuốc mới cần có đơn vị tính.')
+      showAlert('Thông báo', 'Thuốc mới cần có đơn vị tính.')
       return
     }
     if (
       isNewMedicine &&
       (!importForm.ingredient.trim() || !importForm.usage.trim() || !importForm.dosage.trim())
     ) {
-      alert('Thuốc mới cần có thành phần, công dụng và hướng dẫn sử dụng.')
+      showAlert('Thông báo', 'Thuốc mới cần có thành phần, công dụng và hướng dẫn sử dụng.')
       return
     }
     if (!importForm.expiryDate) {
-      alert('Vui lòng nhập hạn sử dụng của lô hàng.')
+      showAlert('Thông báo', 'Vui lòng nhập hạn sử dụng của lô hàng.')
       return
     }
 
@@ -399,93 +427,96 @@ export default function Inventory() {
     const expiryDate = new Date(importForm.expiryDate)
     expiryDate.setHours(0, 0, 0, 0)
     if (Number.isNaN(expiryDate.getTime()) || expiryDate < today) {
-      alert('Hạn sử dụng phải là ngày hiện tại hoặc tương lai.')
+      showAlert('Thông báo', 'Hạn sử dụng phải là ngày hiện tại hoặc tương lai.')
       return
     }
 
-    if (isNewMedicine) {
-      const newId = `SP${String(medicines.length + 1).padStart(3, '0')}`
-      const supplierName = importForm.supplierName.trim() || 'Chưa cập nhật'
-      const manufacturerName = importForm.manufacturerName.trim()
-      addMedicine({
-        id: newId,
-        name: medicineName,
-        unit: importForm.unit.trim(),
-        type: importForm.type,
-        category: importForm.category.trim() || 'Chưa phân nhóm',
-        listPrice,
-        salePrice: listPrice,
-        price: listPrice,
-        minStock,
+    try {
+      if (isNewMedicine) {
+        const newId = `SP${String(medicines.length + 1).padStart(3, '0')}`
+        const supplierName = importForm.supplierName.trim() || 'Chưa cập nhật'
+        const manufacturerName = importForm.manufacturerName.trim()
+        await addMedicine({
+          id: newId,
+          name: medicineName,
+          unit: importForm.unit.trim(),
+          type: importForm.type,
+          category: importForm.category.trim() || 'Chưa phân nhóm',
+          listPrice,
+          salePrice: listPrice,
+          price: listPrice,
+          minStock,
+          supplierName,
+          manufacturerName,
+          lastImportPrice: importPrice,
+          status: 'ACTIVE',
+          directSale: true,
+          ingredient: importForm.ingredient.trim(),
+          usage: importForm.usage.trim(),
+          dosage: importForm.dosage.trim(),
+          batches: [
+            {
+              id: `LOT-${newId}-${Date.now()}`,
+              lotCode: importForm.lotCode.trim() || `NHAP-${String(Date.now()).slice(-6)}`,
+              qty: quantity,
+              expiryDate: importForm.expiryDate,
+              importDate: new Date().toISOString().slice(0, 10),
+              importPrice,
+              supplierName,
+              manufacturerName,
+            },
+          ],
+        })
+        setExpandedMedicineIds((prev) => ({ ...prev, [newId]: true }))
+        await loadStats()
+        await refreshMedicines({ search: search.trim(), page, pageSize })
+        closeImportModal()
+        return
+      }
+
+      const supplierName = importForm.supplierName.trim() || medicine.supplierName || 'Chưa cập nhật'
+      const manufacturerName =
+        importForm.manufacturerName.trim() || medicine.manufacturerName || ''
+      const nextBatches = [
+        ...(medicine.batches || []),
+        {
+          id: `LOT-${medicine.id}-${Date.now()}`,
+          lotCode: importForm.lotCode.trim() || `NHAP-${String(Date.now()).slice(-6)}`,
+          qty: quantity,
+          expiryDate: importForm.expiryDate,
+          importDate: new Date().toISOString().slice(0, 10),
+          importPrice,
+          supplierName,
+          manufacturerName,
+        },
+      ]
+
+      await updateMedicine(medicine.id, {
+        batches: nextBatches,
         supplierName,
-        manufacturerName,
+        manufacturerName: manufacturerName || medicine.manufacturerName,
         lastImportPrice: importPrice,
-        status: 'ACTIVE',
-        directSale: true,
-        ingredient: importForm.ingredient.trim(),
-        usage: importForm.usage.trim(),
-        dosage: importForm.dosage.trim(),
-        batches: [
-          {
-            id: `LOT-${newId}-${Date.now()}`,
-            lotCode: importForm.lotCode.trim() || `NHAP-${String(Date.now()).slice(-6)}`,
-            qty: quantity,
-            expiryDate: importForm.expiryDate,
-            importDate: new Date().toISOString().slice(0, 10),
-            importPrice,
-            supplierName,
-            manufacturerName,
-          },
-        ],
+        status: medicine.status === 'INACTIVE' ? 'INACTIVE' : 'ACTIVE',
       })
-      setExpandedMedicineIds((prev) => ({ ...prev, [newId]: true }))
+      setExpandedMedicineIds((prev) => ({ ...prev, [medicine.id]: true }))
+      await loadStats()
+      await refreshMedicines({ search: search.trim(), page, pageSize })
       closeImportModal()
-      return
+    } catch (error) {
+      showError(error.response?.data?.message || error.message || 'Không thể nhập kho')
     }
-
-    const supplierName = importForm.supplierName.trim() || medicine.supplierName || 'Chưa cập nhật'
-    const manufacturerName =
-      importForm.manufacturerName.trim() || medicine.manufacturerName || ''
-    const nextBatches = [
-      ...(medicine.batches || []),
-      {
-        id: `LOT-${medicine.id}-${Date.now()}`,
-        lotCode: importForm.lotCode.trim() || `NHAP-${String(Date.now()).slice(-6)}`,
-        qty: quantity,
-        expiryDate: importForm.expiryDate,
-        importDate: new Date().toISOString().slice(0, 10),
-        importPrice,
-        supplierName,
-        manufacturerName,
-      },
-    ]
-    const nextStock = Number(medicine.stock || 0) + quantity
-
-    updateMedicine(medicine.id, {
-      batches: nextBatches,
-      supplierName,
-      manufacturerName: manufacturerName || medicine.manufacturerName,
-      lastImportPrice: importPrice,
-      status: medicine.status === 'INACTIVE' ? 'INACTIVE' : 'ACTIVE',
-      alertStatus: nextStock > Number(medicine.minStock || 0) ? 'NONE' : medicine.alertStatus,
-      alertNote: nextStock > Number(medicine.minStock || 0) ? '' : medicine.alertNote,
-      alertBy: nextStock > Number(medicine.minStock || 0) ? '' : medicine.alertBy,
-      alertAt: nextStock > Number(medicine.minStock || 0) ? '' : medicine.alertAt,
-    })
-    setExpandedMedicineIds((prev) => ({ ...prev, [medicine.id]: true }))
-    closeImportModal()
   }
 
-  const submitMedicine = (e) => {
+  const submitMedicine = async (e) => {
     e.preventDefault()
     if (!medicineForm.name.trim()) {
-      alert('Vui lòng nhập tên thuốc.')
+      showAlert('Thông báo', 'Vui lòng nhập tên thuốc.')
       setActiveMedicineFormTab('info')
       return
     }
 
     if (!medicineForm.unit.trim()) {
-      alert('Vui lòng nhập đơn vị tính.')
+      showAlert('Thông báo', 'Vui lòng nhập đơn vị tính.')
       setActiveMedicineFormTab('info')
       return
     }
@@ -500,19 +531,19 @@ export default function Inventory() {
       lotQty > 0
 
     if (![listPrice, minStock, importPrice, lotQty].every((value) => Number.isFinite(value) && value >= 0)) {
-      alert('Các trường số lượng và giá phải là số không âm.')
+      showAlert('Thông báo', 'Các trường số lượng và giá phải là số không âm.')
       setActiveMedicineFormTab('price-stock')
       return
     }
 
     if (medicineModal.mode === 'create' && (!medicineForm.expiryDate || lotQty <= 0)) {
-      alert('Khi thêm thuốc mới, vui lòng nhập lô ban đầu với số lượng lớn hơn 0 và hạn sử dụng hợp lệ.')
+      showAlert('Thông báo', 'Khi thêm thuốc mới, vui lòng nhập lô ban đầu với số lượng lớn hơn 0 và hạn sử dụng hợp lệ.')
       setActiveMedicineFormTab('batch')
       return
     }
 
     if (hasBatchInput && !medicineForm.expiryDate) {
-      alert('Vui lòng nhập hạn sử dụng cho lô thuốc.')
+      showAlert('Thông báo', 'Vui lòng nhập hạn sử dụng cho lô thuốc.')
       setActiveMedicineFormTab('batch')
       return
     }
@@ -523,14 +554,14 @@ export default function Inventory() {
       const expiryDate = new Date(medicineForm.expiryDate)
       expiryDate.setHours(0, 0, 0, 0)
       if (Number.isNaN(expiryDate.getTime()) || expiryDate < today) {
-        alert('Hạn sử dụng phải là ngày hiện tại hoặc tương lai.')
+        showAlert('Thông báo', 'Hạn sử dụng phải là ngày hiện tại hoặc tương lai.')
         setActiveMedicineFormTab('batch')
         return
       }
     }
 
     if (hasBatchInput && lotQty <= 0) {
-      alert('Số lượng lô phải lớn hơn 0 khi nhập thông tin lô.')
+      showAlert('Thông báo', 'Số lượng lô phải lớn hơn 0 khi nhập thông tin lô.')
       setActiveMedicineFormTab('batch')
       return
     }
@@ -585,20 +616,25 @@ export default function Inventory() {
       usage: medicineForm.usage.trim(),
     }
 
-    if (medicineModal.mode === 'edit') {
-      updateMedicine(id, payload)
-    } else {
-      addMedicine(payload)
+    try {
+      if (medicineModal.mode === 'edit') {
+        await updateMedicine(id, payload)
+      } else {
+        await addMedicine(payload)
+      }
+      closeMedicineModal()
+    } catch (error) {
+      showError(error.response?.data?.message || error.message || 'Không thể lưu thuốc')
     }
-    closeMedicineModal()
   }
 
-  const handleDeleteMedicine = (medicine) => {
+  const handleDeleteMedicine = async (medicine) => {
     if (!window.confirm(`Chuyển thuốc "${medicine.name}" sang trạng thái ngừng kinh doanh?`)) return
-    updateMedicine(medicine.id, {
-      status: 'INACTIVE',
-      directSale: false,
-    })
+    try {
+      await deleteMedicine(medicine.id)
+    } catch (error) {
+      showError(error.response?.data?.message || error.message || 'Không thể ngừng kinh doanh thuốc')
+    }
   }
 
   return (
@@ -609,7 +645,7 @@ export default function Inventory() {
             {
               label: 'Thuốc trong kho',
               value: inventorySummary.totalMedicines,
-              hint: `${inventorySummary.totalBatches} lô`,
+              hint: `${inventoryStats?.totalMedicines ?? medicineMeta?.total ?? 0} thuốc`,
               className: 'bg-slate-50 text-slate-700',
             },
             {
@@ -655,7 +691,10 @@ export default function Inventory() {
               <input
                 placeholder="Tìm theo mã hoặc tên thuốc..."
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(e) => {
+                  setSearch(e.target.value)
+                  setPage(1)
+                }}
                 className="w-full bg-transparent text-sm text-slate-700 outline-none"
               />
             </div>
@@ -709,7 +748,13 @@ export default function Inventory() {
             </thead>
 
             <tbody>
-              {filteredData.length > 0 ? (
+              {listLoading ? (
+                <tr>
+                  <td colSpan={isAdmin ? 4 : 3} className="p-10 text-center text-slate-400">
+                    Đang tải danh sách thuốc...
+                  </td>
+                </tr>
+              ) : filteredData.length > 0 ? (
                 Object.entries(groupedFilteredData).flatMap(([type, items]) => [
                   <tr key={`group-${type}`} className="border-t border-slate-100 bg-slate-50">
                     <td
@@ -868,13 +913,47 @@ export default function Inventory() {
               ) : (
                 <tr>
                   <td colSpan={isAdmin ? 4 : 3} className="p-10 text-center text-slate-400">
-                    Không tìm thấy thuốc phù hợp với từ khóa.
+                    {medicineMeta?.total
+                      ? 'Không tìm thấy thuốc phù hợp với bộ lọc trên trang này.'
+                      : search.trim()
+                      ? 'Không tìm thấy thuốc phù hợp với từ khóa.'
+                      : 'Chưa có thuốc trong kho.'}
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
+
+        {medicineMeta?.total > 0 && (
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-slate-500">
+              Hiển thị {(page - 1) * pageSize + 1}-
+              {Math.min(page * pageSize, medicineMeta.total)} / {medicineMeta.total} thuốc
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={page <= 1 || listLoading}
+                onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Trước
+              </button>
+              <span className="text-sm text-slate-600">
+                Trang {page} / {totalPages}
+              </span>
+              <button
+                type="button"
+                disabled={page >= totalPages || listLoading}
+                onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+                className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Sau
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {batchDetailModal.isOpen && batchDetailMedicine && (

@@ -1,15 +1,23 @@
 import { useMemo, useState } from 'react'
 import { useSetPageHeader } from '../../context/PageHeaderContext'
 import { useInventoryAlerts } from '../../context/InventoryAlertContext'
-import { FaSearch, FaExclamationTriangle } from 'react-icons/fa'
+import { useAppDialog } from '../../context/AppDialogContext'
+import { FaSearch } from 'react-icons/fa'
 
 const roleOptions = ['Admin', 'Nhân viên bán hàng']
 const ROOT_EMPLOYEE_ID = 'NV001'
 
+function isProtectedRootAccount(employee) {
+  return (
+    employee?.isRoot === true ||
+    String(employee?.id || employee?.employeeId || '').toUpperCase() === ROOT_EMPLOYEE_ID
+  )
+}
+
 export default function Employees() {
   useSetPageHeader(
     'Quản lý nhân viên',
-    'Admin chỉ đổi vai trò và vô hiệu hóa/kích hoạt tài khoản nhân viên',
+    'Xem danh sách, đổi vai trò và vô hiệu hóa/kích hoạt tài khoản',
   )
 
   const currentUser = JSON.parse(localStorage.getItem('user') || 'null')
@@ -21,28 +29,9 @@ export default function Employees() {
       String(currentUser?.employeeId || '').toUpperCase() === ROOT_EMPLOYEE_ID ||
       currentUser?.email === 'admin@gmail.com')
   const { employees, updateEmployeeRole, toggleEmployeeStatus } = useInventoryAlerts()
+  const { showAlert, showConfirm } = useAppDialog()
   const [search, setSearch] = useState('')
   const [filterRole, setFilterRole] = useState('Tất cả')
-
-  const [dialog, setDialog] = useState({
-    isOpen: false,
-    type: 'alert',
-    title: '',
-    message: '',
-    onConfirm: null,
-  })
-
-  const showAlert = (title, message) => {
-    setDialog({ isOpen: true, type: 'alert', title, message, onConfirm: null })
-  }
-
-  const showConfirm = (title, message, onConfirmCallback) => {
-    setDialog({ isOpen: true, type: 'confirm', title, message, onConfirm: onConfirmCallback })
-  }
-
-  const closeDialog = () => {
-    setDialog((prev) => ({ ...prev, isOpen: false }))
-  }
 
   const filteredEmployees = useMemo(() => {
     return employees.filter((item) => {
@@ -65,14 +54,10 @@ export default function Employees() {
       showAlert('Từ chối truy cập', 'Chỉ Quản trị viên (Admin) mới có quyền đổi vai trò.')
       return
     }
-    const isRootAccount =
-      employee?.isRoot === true ||
-      Number(employee?.accountId) === 1 ||
-      String(employee?.id || '').toUpperCase() === ROOT_EMPLOYEE_ID
-    if (isRootAccount) {
+    if (isProtectedRootAccount(employee)) {
       showAlert(
         'Tài khoản được bảo vệ',
-        'Tài khoản Chủ nhà thuốc (Root - ID = 1) không được phép chỉnh sửa vai trò.',
+        'Tài khoản Chủ nhà thuốc (Root) không được phép chỉnh sửa vai trò.',
       )
       return
     }
@@ -83,7 +68,9 @@ export default function Employees() {
       )
       return
     }
-    updateEmployeeRole(employee.id, nextRole, currentUser)
+    updateEmployeeRole(employee.id, nextRole).catch((error) => {
+      showAlert('Lỗi', error.response?.data?.message || error.message || 'Không thể đổi vai trò')
+    })
   }
 
   const handleToggleStatus = (employee) => {
@@ -91,14 +78,10 @@ export default function Employees() {
       showAlert('Từ chối truy cập', 'Chỉ Quản trị viên (Admin) mới có quyền vô hiệu hóa tài khoản.')
       return
     }
-    const isRootAccount =
-      employee?.isRoot === true ||
-      Number(employee?.accountId) === 1 ||
-      String(employee?.id || '').toUpperCase() === ROOT_EMPLOYEE_ID
-    if (isRootAccount) {
+    if (isProtectedRootAccount(employee)) {
       showAlert(
         'Tài khoản được bảo vệ',
-        'Không thể khóa hoặc vô hiệu hóa tài khoản Chủ nhà thuốc (Root - ID = 1).',
+        'Không thể khóa hoặc vô hiệu hóa tài khoản Chủ nhà thuốc (Root).',
       )
       return
     }
@@ -117,17 +100,17 @@ export default function Employees() {
         ? `Bạn có chắc muốn kích hoạt lại tài khoản [${employee.fullName}]?`
         : `Bạn có chắc muốn vô hiệu hóa tài khoản [${employee.fullName}]?`,
       () => {
-        toggleEmployeeStatus(employee.id, willActive, currentUser)
-        closeDialog()
+        toggleEmployeeStatus(employee.id, willActive).catch((error) => {
+          showAlert('Lỗi', error.response?.data?.message || error.message || 'Không thể cập nhật trạng thái')
+        })
       },
     )
   }
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300 w-full pt-0">
-     
       <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
-        <StatCard title="Tổng nhân viên" value={employees.length} subtitle="Toàn bộ tài khoản đã tạo" />
+        <StatCard title="Tổng nhân viên" value={employees.length} subtitle="Toàn bộ tài khoản đã đăng ký" />
         <StatCard title="Quản trị viên" value={employees.filter((item) => item.role === 'Admin').length} subtitle="Tài khoản cấp Admin" />
         <StatCard
           title="Đang hoạt động"
@@ -149,17 +132,15 @@ export default function Employees() {
             />
           </div>
 
-          <div className="flex items-center gap-3">
-            <select
-              value={filterRole}
-              onChange={(e) => setFilterRole(e.target.value)}
-              className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none focus:border-emerald-400"
-            >
-              <option value="Tất cả">Tất cả vai trò</option>
-              <option value="Admin">Admin</option>
-              <option value="Nhân viên bán hàng">Nhân viên bán hàng</option>
-            </select>
-          </div>
+          <select
+            value={filterRole}
+            onChange={(e) => setFilterRole(e.target.value)}
+            className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none focus:border-emerald-400"
+          >
+            <option value="Tất cả">Tất cả vai trò</option>
+            <option value="Admin">Admin</option>
+            <option value="Nhân viên bán hàng">Nhân viên bán hàng</option>
+          </select>
         </div>
 
         <div className="mt-5 overflow-x-auto rounded-[22px] border border-slate-100">
@@ -186,29 +167,27 @@ export default function Employees() {
                     <td className="p-4 text-slate-600">{item.username}</td>
                     <td className="p-4">
                       {(() => {
-                        const isRootAccount =
-                          item?.isRoot === true ||
-                          Number(item?.accountId) === 1 ||
-                          String(item?.id || '').toUpperCase() === ROOT_EMPLOYEE_ID
                         const canEditRole =
-                          isAdmin && !isRootAccount && (isRootAdmin || item.role !== 'Admin')
+                          isAdmin &&
+                          !isProtectedRootAccount(item) &&
+                          (isRootAdmin || item.role !== 'Admin')
                         return (
-                      <select
-                        value={item.role}
-                        onChange={(e) => handleRoleChange(item, e.target.value)}
-                        disabled={!canEditRole}
-                        className={`rounded-xl border px-3 py-2 text-xs font-semibold outline-none ${
-                          canEditRole
-                            ? 'border-slate-200 bg-white text-slate-700 focus:border-emerald-400'
-                            : 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400'
-                        }`}
-                      >
-                        {roleOptions.map((role) => (
-                          <option key={role} value={role}>
-                            {role}
-                          </option>
-                        ))}
-                      </select>
+                          <select
+                            value={item.role}
+                            onChange={(e) => handleRoleChange(item, e.target.value)}
+                            disabled={!canEditRole}
+                            className={`rounded-xl border px-3 py-2 text-xs font-semibold outline-none ${
+                              canEditRole
+                                ? 'border-slate-200 bg-white text-slate-700 focus:border-emerald-400'
+                                : 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400'
+                            }`}
+                          >
+                            {roleOptions.map((role) => (
+                              <option key={role} value={role}>
+                                {role}
+                              </option>
+                            ))}
+                          </select>
                         )
                       })()}
                     </td>
@@ -229,9 +208,7 @@ export default function Employees() {
                           onClick={() => handleToggleStatus(item)}
                           disabled={
                             !isAdmin ||
-                            item?.isRoot === true ||
-                            Number(item?.accountId) === 1 ||
-                            String(item?.id || '').toUpperCase() === ROOT_EMPLOYEE_ID ||
+                            isProtectedRootAccount(item) ||
                             (item.role === 'Admin' && !isRootAdmin)
                           }
                           className={`rounded-xl px-3 py-2 text-xs font-semibold transition ${
@@ -258,38 +235,6 @@ export default function Employees() {
           </table>
         </div>
       </div>
-
-      {/* --- CUSTOM POPUP (THAY THẾ ALERT/CONFIRM) --- */}
-      {dialog.isOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="w-full max-w-sm overflow-hidden rounded-[24px] bg-white shadow-2xl animate-in zoom-in-95 duration-200">
-            <div className="p-6 text-center">
-              <div className={`mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full ${dialog.type === 'confirm' ? 'bg-red-100 text-red-600' : 'bg-yellow-100 text-yellow-600'}`}>
-                <FaExclamationTriangle size={28} />
-              </div>
-              <h3 className="text-xl font-bold text-slate-900">{dialog.title}</h3>
-              <p className="mt-2 text-sm text-slate-500 leading-relaxed">{dialog.message}</p>
-            </div>
-
-            <div className="flex gap-3 bg-slate-50 p-4">
-              {dialog.type === 'confirm' ? (
-                <>
-                  <button onClick={closeDialog} className="flex-1 rounded-xl bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm border border-slate-200 hover:bg-slate-50 transition">
-                    Hủy
-                  </button>
-                  <button onClick={dialog.onConfirm} className="flex-1 rounded-xl bg-red-600 px-4 py-3 text-sm font-medium text-white shadow-sm hover:bg-red-700 transition">
-                    Xác nhận
-                  </button>
-                </>
-              ) : (
-                <button onClick={closeDialog} className="w-full rounded-xl bg-emerald-600 px-4 py-3 text-sm font-medium text-white shadow-sm hover:bg-emerald-700 transition">
-                  Đã hiểu
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   FaArrowUp,
   FaArrowDown,
@@ -11,6 +11,24 @@ import {
 import { useInventoryAlerts } from '../../context/InventoryAlertContext'
 import { useSetPageHeader } from '../../context/PageHeaderContext'
 import AdminRevenueReport from './AdminRevenueReport'
+import * as reportApi from '../../api/reportService'
+
+function formatMoneyShort(value) {
+  return `${new Intl.NumberFormat('vi-VN').format(Number(value || 0))}đ`
+}
+
+function getMonthRange() {
+  const to = new Date()
+  const from = new Date(to.getFullYear(), to.getMonth(), 1)
+  return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) }
+}
+
+function getTodayRange() {
+  const to = new Date()
+  const from = new Date()
+  from.setHours(0, 0, 0, 0)
+  return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) }
+}
 
 export default function AdminHome() {
   useSetPageHeader(
@@ -23,12 +41,21 @@ export default function AdminHome() {
     orderStatusSummary,
   } = useInventoryAlerts()
   const closedOrdersCount = orderStatusSummary.completed + orderStatusSummary.cancelled
+  const [monthSummary, setMonthSummary] = useState(null)
+  const [todaySummary, setTodaySummary] = useState(null)
+
+  useEffect(() => {
+    const month = getMonthRange()
+    const today = getTodayRange()
+    reportApi.getProfitLoss(month.from, month.to).then(setMonthSummary).catch(() => setMonthSummary(null))
+    reportApi.getProfitLoss(today.from, today.to).then(setTodaySummary).catch(() => setTodaySummary(null))
+  }, [])
 
   const stats = useMemo(
     () => [
       {
         title: 'Doanh thu tháng',
-        value: '285.400.000đ',
+        value: formatMoneyShort(monthSummary?.netRevenue ?? monthSummary?.revenue ?? 0),
         change: '+12.5%',
         up: true,
         icon: <FaFileInvoiceDollar size={20} />,
@@ -64,6 +91,7 @@ export default function AdminHome() {
       customersFromOrders.length,
       closedOrdersCount,
       lowStockAlerts.length,
+      monthSummary,
       orderStatusSummary.cancelled,
       orderStatusSummary.completed,
     ],
@@ -100,17 +128,17 @@ export default function AdminHome() {
             <div className="grid grid-cols-2 gap-4">
               <div className="rounded-3xl bg-white/10 p-5 backdrop-blur-sm border border-white/10">
                 <p className="text-sm font-medium text-emerald-100">Doanh thu hôm nay</p>
-                <h3 className="mt-2 text-2xl font-bold">12.500.000đ</h3>
+                <h3 className="mt-2 text-2xl font-bold">{formatMoneyShort(todaySummary?.netRevenue ?? todaySummary?.revenue ?? 0)}</h3>
               </div>
 
               <div className="rounded-3xl bg-white/10 p-5 backdrop-blur-sm border border-white/10">
                 <p className="text-sm font-medium text-emerald-100">Đơn hôm nay</p>
-                <h3 className="mt-2 text-2xl font-bold">28</h3>
+                <h3 className="mt-2 text-2xl font-bold">{orderStatusSummary.completed}</h3>
               </div>
 
               <div className="rounded-3xl bg-white/10 p-5 backdrop-blur-sm border border-white/10">
                 <p className="text-sm font-medium text-emerald-100">Khách mới</p>
-                <h3 className="mt-2 text-2xl font-bold">24</h3>
+                <h3 className="mt-2 text-2xl font-bold">{customersFromOrders.length}</h3>
               </div>
 
               <div className="rounded-3xl bg-white/10 p-5 backdrop-blur-sm border border-white/10">

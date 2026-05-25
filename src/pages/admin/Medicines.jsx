@@ -5,6 +5,7 @@ import {
 } from 'react-icons/fa'
 import { useInventoryAlerts } from '../../context/InventoryAlertContext'
 import { useSetPageHeader } from '../../context/PageHeaderContext'
+import { useAppDialog } from '../../context/AppDialogContext'
 
 const groupOptions = [
   'Thuốc dị ứng',
@@ -40,6 +41,7 @@ export default function Medicines() {
   )
 
   const { medicines, addMedicine, updateMedicine } = useInventoryAlerts()
+  const { showAlert, showError } = useAppDialog()
   const [search, setSearch] = useState('')
   const [selectedTypes, setSelectedTypes] = useState([])
   const [selectedGroup, setSelectedGroup] = useState(ALL_GROUP_OPTION)
@@ -139,7 +141,7 @@ export default function Medicines() {
     const rawValue = priceDrafts[medicine.id] ?? medicine.listPrice ?? medicine.salePrice ?? 0
     const nextPrice = Number(rawValue)
     if (!Number.isFinite(nextPrice) || nextPrice < 0) {
-      alert('Giá niêm yết không hợp lệ.')
+      showAlert('Thông báo', 'Giá niêm yết không hợp lệ.')
       return
     }
 
@@ -147,6 +149,8 @@ export default function Medicines() {
       listPrice: nextPrice,
       salePrice: nextPrice,
       price: nextPrice,
+    }).catch((error) => {
+      showError(error.response?.data?.message || error.message || 'Không thể cập nhật giá')
     })
     setPriceDrafts((prev) => {
       const next = { ...prev }
@@ -159,7 +163,7 @@ export default function Medicines() {
     e.preventDefault()
 
     if (!formData.name.trim()) {
-      alert('Vui lòng nhập tên thuốc')
+      showAlert('Thông báo', 'Vui lòng nhập tên thuốc')
       return
     }
 
@@ -193,7 +197,10 @@ export default function Medicines() {
     }
 
     addMedicine(newItem)
-    handleCloseModal()
+      .then(() => handleCloseModal())
+      .catch((error) => {
+        showError(error.response?.data?.message || error.message || 'Không thể thêm thuốc')
+      })
   }
 
   return (

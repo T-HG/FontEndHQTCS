@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { jsPDF } from 'jspdf'
 import { useInventoryAlerts } from '../../context/InventoryAlertContext'
 import { useSetPageHeader } from '../../context/PageHeaderContext'
+import { useAppDialog } from '../../context/AppDialogContext'
 import {
   FaSearch,
   FaFileExport,
@@ -11,11 +12,19 @@ import {
   FaCheckCircle,
 } from 'react-icons/fa'
 
-const statusOptions = ['Tất cả', 'Hoàn thành', 'Đã hủy']
+import { getApiErrorMessage, mergeReturnedIntoOrder } from '../../api'
+
+const statusOptions = ['Tất cả', 'Hoàn thành', 'Đã trả hàng', 'Đã hủy']
 
 function normalizeOrderStatus(status) {
-  if (status === 'Đã hủy') return 'Đã hủy'
+  if (status === 'Đã hủy' || status === 'CANCELLED') return 'Đã hủy'
+  if (status === 'Đã trả hàng' || status === 'RETURNED') return 'Đã trả hàng'
   return 'Hoàn thành'
+}
+
+function canReturnOrder(status) {
+  const normalized = normalizeOrderStatus(status)
+  return normalized === 'Hoàn thành'
 }
 
 function formatMoney(value) {
@@ -30,15 +39,17 @@ function csvSafe(value) {
 export default function Orders() {
   const currentUser = JSON.parse(localStorage.getItem('user') || 'null')
   const isAdmin = currentUser?.role === 'admin'
+  const canReturn = true
 
   useSetPageHeader(
     'Đơn hàng',
     isAdmin
-      ? 'Quản lý toàn bộ hóa đơn bán hàng trong hệ thống'
-      : 'Theo dõi các hóa đơn do tài khoản của bạn thực hiện',
+      ? 'Quản lý hóa đơn bán hàng, hoàn hàng và hủy hóa đơn khi cần'
+      : 'Xem hóa đơn do bạn tạo và thực hiện hoàn hàng tại quầy',
   )
 
-  const { orders, returnOrderItems } = useInventoryAlerts()
+  const { orders, returnOrderItems, cancelOrder, loadOrderDetail } = useInventoryAlerts()
+  const { showAlert, showError, showSuccess, showConfirm } = useAppDialog()
   const [search, setSearch] = useState('')
   const [selectedStatus, setSelectedStatus] = useState('Tất cả')
   
@@ -49,9 +60,9 @@ export default function Orders() {
   // Lọc đơn hàng
   const scopedOrders = useMemo(() => {
     if (isAdmin) return orders
-    const staffName = currentUser?.name || ''
-    return orders.filter((item) => item.createdBy === staffName)
-  }, [currentUser?.name, isAdmin, orders])
+    const employeeId = String(currentUser?.employeeId || '')
+    return orders.filter((item) => String(item.employeeId || '') === employeeId)
+  }, [currentUser?.employeeId, isAdmin, orders])
 
   const filteredOrders = useMemo(() => {
     return scopedOrders.filter((item) => {
@@ -74,6 +85,8 @@ export default function Orders() {
     switch (status) {
       case 'Hoàn thành':
         return 'bg-emerald-50 text-emerald-600'
+      case 'Đã trả hàng':
+        return 'bg-amber-50 text-amber-700'
       case 'Đã hủy':
         return 'bg-red-50 text-red-600'
       default:
@@ -81,34 +94,92 @@ export default function Orders() {
     }
   }
 
-  const openOrderDetail = (order) => {
-    setSelectedOrder(order)
+  const openOrderDetail = async (order) => {
     setReturnDraft({})
+    try {
+      const detail = await loadOrderDetail(order.id)
+      setSelectedOrder(detail)
+    } catch (error) {
+      showError(getApiErrorMessage(error, 'Không thể tải chi tiết hóa đơn'))
+      setSelectedOrder(order)
+    }
   }
 
-  const handleReturnQtyChange = (itemId, value) => {
-    setReturnDraft((prev) => ({ ...prev, [itemId]: value }))
+  const handleReturnQtyChange = (lineId, value) => {
+    if (!lineId) return
+    setReturnDraft((prev) => ({ ...prev, [lineId]: value }))
   }
 
-  const handleSubmitReturn = () => {
+  const handleSubmitReturn = async () => {
     if (!selectedOrder) return
-    const lines = selectedOrder.items.map((item) => ({
-      id: item.id,
-      qty: Number(returnDraft[item.id] || 0),
-    }))
-    const ok = returnOrderItems(selectedOrder.id, lines)
-    if (!ok) {
-      alert('Vui lòng nhập số lượng hoàn hợp lệ.')
+    const lines = selectedOrder.items
+      .filter((item) => item.lineId)
+      .map((item) => ({
+        lineId: item.lineId,
+        qty: Number(returnDraft[item.lineId] || 0),
+      }))
+
+    const submitted = lines.filter((line) => line.qty > 0)
+    const knownReturnedByLine = Object.fromEntries(
+      (selectedOrder.items || [])
+        .filter((item) => item.lineId)
+        .map((item) => [item.lineId, item.returnedQty || 0]),
+    )
+
+    try {
+      const created = await returnOrderItems(selectedOrder.id, lines, { knownReturnedByLine })
+      if (!created) {
+        showAlert('Thông báo', 'Vui lòng nhập số lượng hoàn hợp lệ.')
+        return
+      }
+
+      showSuccess(
+        'Thành công',
+        `Hoàn hàng thành công.\nMã phiếu trả: ${created.returnId || ''}\nTổng hoàn: ${formatMoney(created.totalRefund || 0)}`,
+      )
+
+      let refreshed = await loadOrderDetail(selectedOrder.id)
+      if (!isAdmin && submitted.length > 0) {
+        refreshed = mergeReturnedIntoOrder(
+          refreshed,
+          Object.fromEntries(submitted.map((line) => [line.lineId, line.qty])),
+        )
+      }
+      setSelectedOrder(refreshed)
+      setReturnDraft({})
+    } catch (error) {
+      showError(getApiErrorMessage(error, 'Không thể hoàn hàng'))
+    }
+  }
+
+  const handleCancelOrder = () => {
+    if (!selectedOrder || !isAdmin) return
+    if (!canReturnOrder(selectedOrder.status)) {
+      showAlert('Thông báo', 'Chỉ có thể hủy hóa đơn đang ở trạng thái Hoàn thành.')
       return
     }
-    setSelectedOrder(null)
-    setReturnDraft({})
+
+    showConfirm(
+      'Hủy hóa đơn',
+      `Bạn có chắc muốn hủy hóa đơn ${selectedOrder.id}? Tồn kho sẽ được hoàn lại theo hệ thống.`,
+      async () => {
+        try {
+          await cancelOrder(selectedOrder.id)
+          showSuccess('Thành công', 'Đã hủy hóa đơn.')
+          const refreshed = await loadOrderDetail(selectedOrder.id)
+          setSelectedOrder(refreshed)
+        } catch (error) {
+          showError(getApiErrorMessage(error, 'Không thể hủy hóa đơn'))
+        }
+      },
+      { confirmLabel: 'Hủy HĐ', cancelLabel: 'Bỏ qua' },
+    )
   }
 
   const handleExportOrders = () => {
     if (!isAdmin) return
     if (filteredOrders.length === 0) {
-      alert('Không có dữ liệu để xuất file.')
+      showAlert('Thông báo', 'Không có dữ liệu để xuất file.')
       return
     }
 
@@ -337,9 +408,9 @@ export default function Orders() {
       {/* MODAL XEM CHI TIẾT ĐƠN HÀNG */}
       {selectedOrder && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm">
-          <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-[28px] bg-white shadow-2xl">
+          <div className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-[28px] bg-white shadow-2xl">
             {/* Header Modal */}
-            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5">
+            <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-6 py-5">
               <div>
                 <h2 className="text-xl font-bold text-slate-900">Chi tiết hóa đơn: {selectedOrder.id}</h2>
                 <p className="mt-1 text-sm text-slate-500">Ngày tạo: {selectedOrder.date}</p>
@@ -353,7 +424,7 @@ export default function Orders() {
             </div>
 
             {/* Nội dung Modal */}
-            <div className="p-6">
+            <div className="min-h-0 flex-1 overflow-y-auto p-6">
               {/* Thông tin khách & Trạng thái */}
               <div className="mb-6 grid grid-cols-2 gap-4 rounded-2xl bg-slate-50 p-4">
                 <div>
@@ -373,40 +444,56 @@ export default function Orders() {
 
               {/* Danh sách sản phẩm */}
               <h3 className="mb-3 font-bold text-slate-800">Danh sách sản phẩm</h3>
-              <div className="overflow-x-auto rounded-xl border border-slate-100">
+              <div className="max-h-[min(45vh,360px)] overflow-y-auto overflow-x-auto rounded-xl border border-slate-100">
                 <table className="w-full text-sm">
-                  <thead className="bg-slate-50 text-left text-slate-500">
+                  <thead className="sticky top-0 z-10 bg-slate-50 text-left text-slate-500 shadow-[0_1px_0_0_rgb(241,245,249)]">
                     <tr>
                       <th className="p-3">Sản phẩm</th>
                       <th className="p-3 text-center">ĐVT</th>
                       <th className="p-3 text-center">SL</th>
                       <th className="p-3 text-right">Đơn giá</th>
-                      {!isAdmin && normalizeOrderStatus(selectedOrder.status) !== 'Đã hủy' && (
+                      {canReturn && canReturnOrder(selectedOrder.status) && (
                         <th className="p-3 text-center">Hoàn</th>
                       )}
                       <th className="p-3 text-right">Thành tiền</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {selectedOrder.items.map((item, index) => {
-                      const maxReturnable = Math.max(0, Number(item.qty || 0))
+                    {selectedOrder.items.map((item) => {
+                      const maxReturnable = Math.max(
+                        0,
+                        Number(item.maxReturnable ?? item.qty - (item.returnedQty || 0)),
+                      )
+                      const lineKey = item.lineId
+                      if (!lineKey) return null
                       return (
-                        <tr key={index} className="border-t border-slate-100">
-                          <td className="p-3 font-medium text-slate-700">{item.name}</td>
+                        <tr key={lineKey} className="border-t border-slate-100">
+                          <td className="p-3 font-medium text-slate-700">
+                            <p>{item.name}</p>
+                            {Number(item.returnedQty || 0) > 0 && (
+                              <p className="mt-1 text-xs text-amber-600">
+                                Đã trả {item.returnedQty}/{item.qty}
+                              </p>
+                            )}
+                          </td>
                           <td className="p-3 text-center text-slate-600">{item.unit}</td>
                           <td className="p-3 text-center text-slate-600">{item.qty}</td>
                           <td className="p-3 text-right text-slate-600">{formatMoney(item.price)}</td>
-                          {!isAdmin && normalizeOrderStatus(selectedOrder.status) !== 'Đã hủy' && (
+                          {canReturn && canReturnOrder(selectedOrder.status) && (
                             <td className="p-3 text-center">
-                              <input
-                                type="number"
-                                min="0"
-                                max={maxReturnable}
-                                value={returnDraft[item.id] || ''}
-                                onChange={(e) => handleReturnQtyChange(item.id, e.target.value)}
-                                className="w-20 rounded-lg border border-slate-200 px-2 py-1 text-center outline-none focus:border-blue-400"
-                                placeholder="0"
-                              />
+                              {maxReturnable > 0 ? (
+                                <input
+                                  type="number"
+                                  min="0"
+                                  max={maxReturnable}
+                                  value={returnDraft[lineKey] || ''}
+                                  onChange={(e) => handleReturnQtyChange(lineKey, e.target.value)}
+                                  className="w-20 rounded-lg border border-slate-200 px-2 py-1 text-center outline-none focus:border-blue-400"
+                                  placeholder="0"
+                                />
+                              ) : (
+                                <span className="text-xs text-slate-400">Đã trả hết</span>
+                              )}
                             </td>
                           )}
                           <td className="p-3 text-right font-semibold text-slate-800">{formatMoney(item.total)}</td>
@@ -420,40 +507,57 @@ export default function Orders() {
               {/* Tổng cộng */}
               <div className="mt-6 flex justify-end">
                 <div className="w-full max-w-xs space-y-2 rounded-xl bg-slate-50 p-4">
+                  {Number(selectedOrder.totalRefunded || 0) > 0 && (
+                    <>
+                      <div className="flex justify-between text-sm text-slate-600">
+                        <span>Tổng gốc:</span>
+                        <span>{formatMoney(selectedOrder.originalTotal ?? selectedOrder.total)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm text-amber-700">
+                        <span>Đã hoàn:</span>
+                        <span>-{formatMoney(selectedOrder.totalRefunded)}</span>
+                      </div>
+                    </>
+                  )}
                   <div className="flex justify-between text-sm text-slate-600">
-                    <span>Tổng tiền hàng:</span>
+                    <span>{Number(selectedOrder.totalRefunded || 0) > 0 ? 'Còn lại:' : 'Tổng tiền hàng:'}</span>
                     <span>{formatMoney(selectedOrder.total)}</span>
                   </div>
                   <div className="flex justify-between border-t border-slate-200 pt-2 text-base font-bold text-slate-800">
-                    <span>Khách cần trả:</span>
+                    <span>Khách đã trả:</span>
                     <span className="text-blue-600">{formatMoney(selectedOrder.total)}</span>
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-3 border-t border-slate-100 px-6 py-4">
-              {!isAdmin && (
-                <>
-                  {normalizeOrderStatus(selectedOrder.status) !== 'Đã hủy' && (
-                    <button
-                      type="button"
-                      onClick={handleSubmitReturn}
-                      className="flex items-center gap-2 rounded-xl bg-yellow-500 px-4 py-2.5 font-medium text-white hover:bg-yellow-600"
-                    >
-                      Hoàn hàng
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={handleExportInvoicePdf}
-                    className="flex items-center gap-2 rounded-xl bg-slate-100 px-4 py-2.5 font-medium text-slate-600 hover:bg-slate-200"
-                  >
-                    <FaPrint />
-                    In hóa đơn
-                  </button>
-                </>
+            <div className="flex shrink-0 items-center justify-end gap-3 border-t border-slate-100 px-6 py-4">
+              {isAdmin && canReturnOrder(selectedOrder.status) && (
+                <button
+                  type="button"
+                  onClick={handleCancelOrder}
+                  className="flex items-center gap-2 rounded-xl bg-red-50 px-4 py-2.5 font-medium text-red-600 hover:bg-red-100"
+                >
+                  Hủy hóa đơn
+                </button>
               )}
+              {canReturn && canReturnOrder(selectedOrder.status) && (
+                <button
+                  type="button"
+                  onClick={handleSubmitReturn}
+                  className="flex items-center gap-2 rounded-xl bg-yellow-500 px-4 py-2.5 font-medium text-white hover:bg-yellow-600"
+                >
+                  Hoàn hàng
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={handleExportInvoicePdf}
+                className="flex items-center gap-2 rounded-xl bg-slate-100 px-4 py-2.5 font-medium text-slate-600 hover:bg-slate-200"
+              >
+                <FaPrint />
+                In hóa đơn
+              </button>
               <button
                 onClick={() => setSelectedOrder(null)}
                 className="flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-2.5 font-medium text-white hover:bg-blue-700"

@@ -1,6 +1,8 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
+import { lookupCustomer, getApiErrorMessage } from '../../api'
 import { getDisplayStatus, useInventoryAlerts } from '../../context/InventoryAlertContext'
 import { useSetPageHeader } from '../../context/PageHeaderContext'
+import { useAppDialog } from '../../context/AppDialogContext'
 import {
   FaSearch,
   FaUserPlus,
@@ -13,42 +15,7 @@ import {
   FaTimes,
   FaEye,
   FaCartPlus,
-  FaExclamationTriangle,
-  FaCheckCircle
 } from 'react-icons/fa'
-
-const categoryMap = {
-  SP001: 'Giảm đau',
-  SP002: 'Dị ứng',
-  SP003: 'Bổ sung',
-  SP004: 'Tiêu hóa',
-  SP005: 'Giảm đau',
-  SP006: 'Tiêu hóa',
-  SP007: 'Mắt mũi',
-  SP008: 'Vật tư',
-}
-
-const ingredientMap = {
-  SP001: 'Paracetamol 500mg, Caffeine 65mg',
-  SP002: 'Fexofenadine hydrochloride 60mg',
-  SP003: 'Acid Ascorbic 500mg',
-  SP004: 'Glucose khan, Natri clorid, Kali clorid',
-  SP005: 'Ibuprofen 400mg',
-  SP006: 'Chiết xuất thảo dược tự nhiên (Ngưu nhĩ phong, La liễu)',
-  SP007: 'Natri clorid 0.9%',
-  SP008: 'Vải không dệt 4 lớp, giấy kháng khuẩn',
-}
-
-const usageMap = {
-  SP001: 'Giảm đau đầu, đau răng, hạ sốt nhanh',
-  SP002: 'Điều trị các triệu chứng viêm mũi dị ứng, mề đay vô căn',
-  SP003: 'Bổ sung vitamin C, tăng cường sức đề kháng cho cơ thể',
-  SP004: 'Bù nước và điện giải trong các trường hợp tiêu chảy, sốt cao',
-  SP005: 'Giảm các cơn đau nhẹ đến vừa, chống viêm không steroid',
-  SP006: 'Hỗ trợ giảm viêm đại tràng cấp và mãn tính, tiêu hóa kém',
-  SP007: 'Rửa mắt, mũi, súc miệng kháng khuẩn hàng ngày',
-  SP008: 'Lọc bụi mịn, kháng khuẩn, bảo vệ đường hô hấp',
-}
 
 function formatMoney(value) {
   return new Intl.NumberFormat('vi-VN').format(Number(value || 0)) + ' đ'
@@ -59,15 +26,16 @@ const generateInvoiceId = () => `HD${Math.floor(100000 + Math.random() * 900000)
 
 export default function Sales() {
   useSetPageHeader('Bán hàng tại quầy', 'Tìm kiếm sản phẩm và thanh toán nhanh chóng')
-  const { medicines: inventoryMedicines, addOrder, consumeStock } = useInventoryAlerts()
+  const { medicines: inventoryMedicines, addOrder } = useInventoryAlerts()
+  const { showAlert, showSuccess, showConfirm } = useAppDialog()
   const medicines = useMemo(
     () =>
       inventoryMedicines.map((item) => ({
         ...item,
         price: Number(item.listPrice || item.salePrice || item.price || 0),
-        category: item.category || categoryMap[item.id] || 'Khác',
-        ingredient: ingredientMap[item.id] || 'Chưa cập nhật',
-        usage: usageMap[item.id] || 'Chưa cập nhật',
+        category: item.category || 'Chưa phân nhóm',
+        ingredient: item.ingredient || 'Chưa cập nhật',
+        usage: item.usage || 'Chưa cập nhật',
       })),
     [inventoryMedicines],
   )
@@ -80,34 +48,28 @@ export default function Sales() {
   const [customerPhone, setCustomerPhone] = useState('')
   const [customerErrors, setCustomerErrors] = useState({ name: '', phone: '' })
 
+  useEffect(() => {
+    const raw = customerPhone.trim().replace(/\s/g, '')
+    const normalized =
+      raw.startsWith('+84') ? `0${raw.slice(3)}` : raw.startsWith('84') && raw.length >= 11 ? `0${raw.slice(2)}` : raw
+    if (!/^0\d{9}$/.test(normalized)) return
+
+    const timer = setTimeout(() => {
+      lookupCustomer(normalized)
+        .then((data) => {
+          if (data?.customerName && !customerName.trim()) {
+            setCustomerName(data.customerName)
+          }
+        })
+        .catch(() => {})
+    }, 400)
+
+    return () => clearTimeout(timer)
+  }, [customerPhone, customerName])
+
   // State lưu thông tin thuốc đang được chọn để hiển thị Modal
   const [selectedMedicine, setSelectedMedicine] = useState(null)
 
-  // --- STATE POPUP CẢNH BÁO / XÁC NHẬN ---
-  const [dialog, setDialog] = useState({
-    isOpen: false,
-    type: 'alert', // 'alert' | 'confirm' | 'success'
-    title: '',
-    message: '',
-    onConfirm: null,
-  })
-
-  const showAlert = (title, message) => {
-    setDialog({ isOpen: true, type: 'alert', title, message, onConfirm: null })
-  }
-
-  const showSuccess = (title, message, onConfirmCallback) => {
-    setDialog({ isOpen: true, type: 'success', title, message, onConfirm: onConfirmCallback })
-  }
-
-  const showConfirm = (title, message, onConfirmCallback) => {
-    setDialog({ isOpen: true, type: 'confirm', title, message, onConfirm: onConfirmCallback })
-  }
-
-  const closeDialog = () => {
-    setDialog((prev) => ({ ...prev, isOpen: false }))
-  }
-  
   const filteredMedicines = useMemo(() => {
     const keyword = searchQuery.trim().toLowerCase()
     return medicines.filter(
@@ -197,12 +159,12 @@ export default function Sales() {
       'Bạn có chắc chắn muốn hủy đơn hàng hiện tại? Toàn bộ sản phẩm trong giỏ sẽ bị xóa.',
       () => {
         resetForm()
-        closeDialog()
-      }
+      },
+      { confirmLabel: 'Hủy đơn', cancelLabel: 'Bỏ qua' },
     )
   }
 
-  const handleCheckout = () => {
+  const handleCheckout = async () => {
     if (cart.length === 0) {
       showAlert('Cảnh báo', 'Giỏ hàng đang trống! Vui lòng chọn sản phẩm trước khi thanh toán.')
       return
@@ -230,37 +192,30 @@ export default function Sales() {
       total: (Number(item.qty) || 0) * (Number(item.price) || 0),
     }))
 
-    const stockResult = consumeStock(orderItems)
-    if (!stockResult.ok) {
-      const detail = stockResult.shortages
-        .map((item) => `${item.name}: cần ${item.requested}, còn ${item.available}`)
-        .join('\n')
-      showAlert('Không đủ tồn kho để thanh toán', detail)
-      return
+    try {
+      const created = await addOrder({
+        customerName: finalCustomer || 'Khách lẻ',
+        phone: finalPhone,
+        total: totalPrice,
+        status: 'Hoàn thành',
+        createdBy: currentUser?.name || 'Nhân viên',
+        createdAt: new Date().toISOString(),
+        items: orderItems,
+      })
+
+      const realInvoiceId = created?.invoiceId || invoiceId
+      const billDetails = `Hóa đơn: ${realInvoiceId}\nKhách hàng: ${finalCustomer || 'Khách lẻ'}\nSố điện thoại: ${finalPhone || 'Không nhập'}\nTổng tiền thanh toán: ${formatMoney(created?.totalAmount ?? totalPrice)}`
+
+      showSuccess(
+        'Thanh toán thành công!',
+        billDetails,
+        () => {
+          resetForm()
+        },
+      )
+    } catch (error) {
+      showAlert('Thanh toán thất bại', getApiErrorMessage(error, 'Không thể tạo hóa đơn'))
     }
-
-    addOrder({
-      id: invoiceId,
-      customerName: finalCustomer || 'Khách lẻ',
-      phone: finalPhone,
-      total: totalPrice,
-      status: 'Hoàn thành',
-      createdBy: currentUser?.name || 'Nhân viên',
-      createdAt: new Date().toISOString(),
-      items: orderItems,
-    })
-
-    // Tạo nội dung chi tiết hóa đơn
-    const billDetails = `Hóa đơn: ${invoiceId}\nKhách hàng: ${finalCustomer || 'Khách lẻ'}\nSố điện thoại: ${finalPhone || 'Không nhập'}\nTổng tiền thanh toán: ${formatMoney(totalPrice)}`
-
-    showSuccess(
-      'Thanh toán thành công!',
-      billDetails,
-      () => {
-        resetForm()
-        closeDialog()
-      }
-    )
   }
 
   const totalItems = cart.reduce((sum, item) => sum + (Number(item.qty) || 0), 0)
@@ -527,52 +482,6 @@ export default function Sales() {
                   <p className="leading-relaxed text-slate-600">{selectedMedicine.usage}</p>
                 </div>
               </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* --- CUSTOM POPUP (THAY THẾ ALERT/CONFIRM) --- */}
-      {dialog.isOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="w-full max-w-sm overflow-hidden rounded-[24px] bg-white shadow-2xl animate-in zoom-in-95 duration-200">
-            <div className="p-6 text-center">
-              <div 
-                className={`mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full ${
-                  dialog.type === 'success' 
-                    ? 'bg-emerald-100 text-emerald-600' 
-                    : dialog.type === 'confirm' 
-                      ? 'bg-red-100 text-red-600' 
-                      : 'bg-yellow-100 text-yellow-600'
-                }`}
-              >
-                {dialog.type === 'success' ? <FaCheckCircle size={32} /> : <FaExclamationTriangle size={28} />}
-              </div>
-              <h3 className="text-xl font-bold text-slate-900">{dialog.title}</h3>
-              <p className="mt-3 text-sm text-slate-500 leading-relaxed whitespace-pre-line text-left bg-slate-50 p-3 rounded-xl border border-slate-100 inline-block w-full">
-                {dialog.message}
-              </p>
-            </div>
-
-            <div className="flex gap-3 bg-slate-50 p-4">
-              {dialog.type === 'confirm' ? (
-                <>
-                  <button onClick={closeDialog} className="flex-1 rounded-xl bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm border border-slate-200 hover:bg-slate-50 transition">
-                    Bỏ qua
-                  </button>
-                  <button onClick={dialog.onConfirm} className="flex-1 rounded-xl bg-red-600 px-4 py-3 text-sm font-medium text-white shadow-sm hover:bg-red-700 transition">
-                    Hủy đơn
-                  </button>
-                </>
-              ) : dialog.type === 'success' ? (
-                <button onClick={dialog.onConfirm || closeDialog} className="w-full rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white shadow-sm hover:bg-emerald-700 transition">
-                  Hoàn tất
-                </button>
-              ) : (
-                <button onClick={closeDialog} className="w-full rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white shadow-sm hover:bg-blue-700 transition">
-                  Đã hiểu
-                </button>
-              )}
             </div>
           </div>
         </div>

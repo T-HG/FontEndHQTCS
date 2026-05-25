@@ -6,8 +6,6 @@ import {
   FaUsers,
   FaFileInvoiceDollar,
   FaCashRegister,
-  FaCrown,
-  FaCog,
   FaUserTie,
 } from 'react-icons/fa'
 import { FaStaffSnake } from 'react-icons/fa6';
